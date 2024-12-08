@@ -66,8 +66,6 @@ void ElegantOTAClass::begin(ELEGANTOTA_WEBSERVER *server, const char * username,
       response->addHeader("Pragma", "no-cache");
       response->addHeader("Expires", "-1");
 
-      
-      response->setContentLength(this->getDeviceInfo().length());
       response->print(this->getDeviceInfo());
       request->send(response);
     });
@@ -79,7 +77,6 @@ void ElegantOTAClass::begin(ELEGANTOTA_WEBSERVER *server, const char * username,
       _server->sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
       _server->sendHeader("Pragma", "no-cache");
       _server->sendHeader("Expires", "-1");
-      _server->sendContentLength(this->getDeviceInfo().length());
       _server->send(200, "application/json", this->getDeviceInfo());
   #endif
 
@@ -364,6 +361,7 @@ String ElegantOTAClass::getDeviceInfo() {
                         "\",\"repository\":\"" + this->gitRepo + 
                         "\",\"chipfamily\":\"" + this->getChipFamily() + 
                         "\"}";
+  return getdeviceinfo;
 }
 
 void ElegantOTAClass::setAuth(const char * username, const char * password){

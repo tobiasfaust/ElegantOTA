@@ -7,6 +7,25 @@ void ElegantOTAClass::begin(ELEGANTOTA_WEBSERVER *server, const char * username,
 
   setAuth(username, password);
 
+  // determine chip family
+  #ifdef ESP32
+    String variantString = ARDUINO_VARIANT;
+  #else
+    String variantString = "esp8266";
+  #endif
+
+  if (variantString == "esp32s3") {
+      this->ChipFamily = "ESP32-S3";
+  } else if (variantString == "esp32c3") {
+      this->ChipFamily = "ESP32-C3";
+  } else if (variantString == "esp32s2") {
+      this->ChipFamily = "ESP32-S2";
+  } else if (variantString == "esp8266") {
+      this->ChipFamily = "ESP8266";
+  } else {
+      this->ChipFamily = "ESP32";
+  }
+
   #if defined(TARGET_RP2040)
     if (!__isPicoW) {
       ELEGANTOTA_DEBUG_MSG("RP2040: Not a Pico W, skipping OTA setup\n");
@@ -20,9 +39,9 @@ void ElegantOTAClass::begin(ELEGANTOTA_WEBSERVER *server, const char * username,
         return request->requestAuthentication();
       }
       #if defined(ASYNCWEBSERVER_VERSION) && ASYNCWEBSERVER_VERSION_MAJOR > 2  // This means we are using recommended fork of AsyncWebServer
-        AsyncWebServerResponse *response = request->beginResponse(200, "text/html", ELEGANT_HTML, sizeof(ELEGANT_HTML));
+        AsyncWebServerResponse *response = request->beginResponse(200, "text/html", ELEGANT_HTML, ELEGANT_HTML_len);
       #else
-        AsyncWebServerResponse *response = request->beginResponse_P(200, "text/html", ELEGANT_HTML, sizeof(ELEGANT_HTML));
+        AsyncWebServerResponse *response = request->beginResponse_P(200, "text/html", ELEGANT_HTML, ELEGANT_HTML_len);
       #endif
       response->addHeader("Content-Encoding", "gzip");
       request->send(response);
@@ -33,8 +52,35 @@ void ElegantOTAClass::begin(ELEGANTOTA_WEBSERVER *server, const char * username,
         return _server->requestAuthentication();
       }
       _server->sendHeader("Content-Encoding", "gzip");
-      _server->send_P(200, "text/html", (const char*)ELEGANT_HTML, sizeof(ELEGANT_HTML));
+      _server->send_P(200, "text/html", (const char*)ELEGANT_HTML, ELEGANT_HTML_len);
     });
+  #endif
+
+  #if ELEGANTOTA_USE_ASYNC_WEBSERVER == 1
+    _server->on("/getdeviceinfo", HTTP_GET, [&](AsyncWebServerRequest *request){
+      if(_authenticate && !request->authenticate(_username.c_str(), _password.c_str())){
+        return request->requestAuthentication();
+      }
+      AsyncResponseStream *response = request->beginResponseStream("application/json");
+      response->addHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      response->addHeader("Pragma", "no-cache");
+      response->addHeader("Expires", "-1");
+
+      
+      response->setContentLength(this->getDeviceInfo().length());
+      response->print(this->getDeviceInfo());
+      request->send(response);
+    });
+  #else
+    _server->on("/getdeviceinfo", HTTP_GET, [&](){
+      if (_authenticate && !_server->authenticate(_username.c_str(), _password.c_str())) {
+        return _server->requestAuthentication();
+      }
+      _server->sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      _server->sendHeader("Pragma", "no-cache");
+      _server->sendHeader("Expires", "-1");
+      _server->sendContentLength(this->getDeviceInfo().length());
+      _server->send(200, "application/json", this->getDeviceInfo());
   #endif
 
   #if ELEGANTOTA_USE_ASYNC_WEBSERVER == 1
@@ -305,6 +351,19 @@ void ElegantOTAClass::begin(ELEGANTOTA_WEBSERVER *server, const char * username,
       }
     });
   #endif
+}
+
+void ElegantOTAClass::setGitEnv(String owner, String repo, String branch) {
+  this->gitOwner = owner;
+  this->gitRepo = repo;
+  this->gitBranch = branch;
+}
+
+String ElegantOTAClass::getDeviceInfo() {
+  String getdeviceinfo = "{\"owner\":\"" + this->gitOwner + 
+                        "\",\"repository\":\"" + this->gitRepo + 
+                        "\",\"chipfamily\":\"" + this->getChipFamily() + 
+                        "\"}";
 }
 
 void ElegantOTAClass::setAuth(const char * username, const char * password){

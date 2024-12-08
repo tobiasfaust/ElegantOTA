@@ -24,7 +24,7 @@ _____ _                        _    ___ _____  _
 #include "elop.h"
 
 #ifndef ELEGANTOTA_USE_ASYNC_WEBSERVER
-  #define ELEGANTOTA_USE_ASYNC_WEBSERVER 0
+  #define ELEGANTOTA_USE_ASYNC_WEBSERVER 1
 #endif
 
 #ifndef ELEGANTOTA_DEBUG
@@ -115,12 +115,25 @@ class ElegantOTAClass{
     void onProgress(std::function<void(size_t current, size_t final)> callable);
     void onEnd(std::function<void(bool success)> callable);
     
+    /**
+     * @brief set some git environemnts, neseccary for selecting right versions file for OAT
+     * 
+     * @param owner set the git Ownername of Repository
+     * @param repo set the git Repository name
+     * @param branch set the current git branch name
+     */
+    void setGitEnv(String owner, String repo, String branch);
+
   private:
     ELEGANTOTA_WEBSERVER *_server;
 
     bool _authenticate;
     String _username;
     String _password;
+    String ChipFamily;
+    String gitOwner;
+    String gitRepo;
+    String gitBranch;
 
     bool _auto_reboot = true;
     bool _reboot = false;
@@ -132,6 +145,9 @@ class ElegantOTAClass{
     std::function<void()> preUpdateCallback = NULL;
     std::function<void(size_t current, size_t final)> progressUpdateCallback = NULL;
     std::function<void(bool success)> postUpdateCallback = NULL;
+
+    String getDeviceInfo();
+    const String& getChipFamily() {return ChipFamily;}
 };
 
 extern ElegantOTAClass ElegantOTA;

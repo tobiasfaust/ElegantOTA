@@ -167,10 +167,11 @@ function onVersionSelect(handleManifest) {
     fetch(`https://${OWNER}.github.io/${REPOSITORY}/${manifestPath}`)
       .then(response => response.json())
       .then(data => {
-        //console.log('JSON data:', data);
-        const esp32Build = data.builds.find(build => build.chipFamily === 'ESP32');
-        if (esp32Build) {
-          const pathWithoutDomain = esp32Build.parts[0].path.replace(/^.*\/\/[^\/]+/, '').replace(/\/[^\/]+$/, '');
+        console.log('JSON data:', data);
+        const cf = data.builds.find(build => build.chipFamily === chipFamily);
+
+        if (cf) {
+          const pathWithoutDomain = cf.parts[0].path.replace(/^.*\/\/[^\/]+/, '').replace(/\/[^\/]+$/, '');
           //console.log(`https://${OWNER}.github.io${pathWithoutDomain}/manifest.json`);
           fetch(`https://${OWNER}.github.io${pathWithoutDomain}/manifest.json`)
             .then(response => response.json())
@@ -180,14 +181,21 @@ function onVersionSelect(handleManifest) {
             })
             .catch(error => console.error('Error loading JSON:', error));
         } else {
-          console.error(`No ${esp32Build} build found.`);
+          //entferne aus der selectlist variants die option die nicht verfügbar ist
+          const selectedVariant = document.getElementById('variants').value;
+          const variantOption = document.querySelector(`#variants option[value="${selectedVariant}"]`);
+          if (variantOption) {
+            document.getElementById('variants').removeChild(variantOption);
+          }
+
+          //alert(`Sorry, no ${variant} found for your ${chipFamily}.`);
         }
     })
     .catch(error => console.error('Error loading JSON:', error));
 } 
 
 function loadBinaryFile(manifest) {
-  //console.log('Loading binary file:', manifest);
+  console.log('Loading manifest:', manifest);
   otamode = document.getElementById('otaMode').value;
 
   const filepattern = otamode === 'fr' ? 'firmware' : 'littlefs';
@@ -247,7 +255,7 @@ function loadBinaryFile(manifest) {
     const basepath = manifest.parts[0].path.replace(/\/[^\/]+$/, '');
 
     console.log(`Loading binary file: ${basepath}/${filename}`);
-    
+
     fetch(`${basepath}/${filename}`)
       .then(response => response.arrayBuffer())
       .then(buffer => {

@@ -246,10 +246,9 @@ function loadBinaryFile(manifest) {
 
     const basepath = manifest.parts[0].path.replace(/\/[^\/]+$/, '');
 
-    console.log('Loading binary file:', basepath, filename);
-
-
-    fetch(filename)
+    console.log(`Loading binary file: ${basepath}/${filename}`);
+    
+    fetch(`${basepath}/${filename}`)
       .then(response => response.arrayBuffer())
       .then(buffer => {
         const blob = new Blob([buffer], { type: 'application/octet-stream' });

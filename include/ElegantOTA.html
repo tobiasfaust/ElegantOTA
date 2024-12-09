@@ -29,6 +29,11 @@ cd ~/MySketchbook/HomeStatusDisplay/ && gzip -c include/elegant_html.html > incl
 
 </style>
 
+<script type="module" crossorigin>
+  import { Octokit } from "https://cdn.skypack.dev/@octokit/core";
+  window.Octokit = Octokit;
+</script>
+
 <script type="text/javascript" crossorigin>
 window.addEventListener('DOMContentLoaded', init, false);
 
@@ -75,7 +80,7 @@ function init() {
       .then(([js, versions, releases]) => {
           window.versions = versions;
           window.releases = releases;
-          GenerateSelectList(false, false);
+          GenerateSelectList(false, false); // GenerateSelectList(useReleases, PreSelectHighestBuild)
           resetVariants();
           resetOtaModes();
           document.getElementById('chipFamilyValue').textContent = chipFamily;
@@ -185,20 +190,74 @@ function loadBinaryFile(manifest) {
   //console.log('Loading binary file:', manifest);
   otamode = document.getElementById('otaMode').value;
 
-  const basepath = manifest.parts[0].path.replace(/\/[^\/]+$/, '');
-
   const filepattern = otamode === 'fr' ? 'firmware' : 'littlefs';
-  const filename = `${basepath}/${filepattern}.${chipFamily}.${manifest.version}-${manifest.build}.${manifest.variant}.${manifest.stage}.bin`;
-  console.log('Loading binary file:', filename);
+  const filename = `${filepattern}.${chipFamily}.${manifest.version}-${manifest.build}.${manifest.variant}.${manifest.stage}.bin`;
+  //console.log('Suche Filename:', filename);
 
-  fetch(filename)
-    .then(response => response.arrayBuffer())
-    .then(buffer => {
-      const blob = new Blob([buffer], { type: 'application/octet-stream' });
-      const file = new File([blob], filename.split('/').pop(), { type: 'application/octet-stream' });
-      onFileInput([file]);
+  // check if the manifest build and variant are availabe in releases
+  const releaseTag = releases.find(release => release.build === manifest.build && release.variant === manifest.variant)?.releasetag
+  
+  if (releaseTag) {
+    console.log(`Release gefunden: ${releaseTag}, suche dort die Datei ${filename}`);
+
+    const octokit = new Octokit({})
+    octokit.request('GET /repos/{owner}/{repo}/releases/tags/{tag}', {
+      owner: OWNER,
+      repo: REPOSITORY,
+      tag: releaseTag,
+      headers: {
+        'X-GitHub-Api-Version': '2022-11-28'
+      }
     })
-    .catch(error => console.error('Error loading binary file:', error));
+    .then(response => {
+      // suche in den Release Assets nach der Datei
+      const asset = response.data.assets.find(asset => asset.name === filename);
+      if (asset) {
+        console.log(`Datei in Release ${releaseTag} gefunden: ${asset.name}`);
+        //get the release asset
+        octokit.request('GET /repos/{owner}/{repo}/releases/assets/{asset_id}', {
+          owner: OWNER,
+          repo: REPOSITORY,
+          asset_id: asset.id,
+          headers: {
+            'X-GitHub-Api-Version': '2022-11-28'
+          }
+        })
+        .then(response => {
+          fetch(response.data.url)
+            .then(response => response.arrayBuffer())
+            .then(buffer => {
+              const blob = new Blob([buffer], { type: 'application/octet-stream' });
+              const file = new File([blob], filename.split('/').pop(), { type: 'application/octet-stream' });
+              onFileInput([file]);
+            })
+            .catch(error => console.error('Error loading release asset:', error));
+        })
+
+      } else {
+        console.error(`No ${filename} found in release assets.`);
+      }
+    })
+    .catch(error => console.error('Error loading release:', error));
+    
+
+
+  } else {
+
+    const basepath = manifest.parts[0].path.replace(/\/[^\/]+$/, '');
+
+    console.log('Loading binary file:', basepath, filename);
+
+
+    fetch(filename)
+      .then(response => response.arrayBuffer())
+      .then(buffer => {
+        const blob = new Blob([buffer], { type: 'application/octet-stream' });
+        const file = new File([blob], filename.split('/').pop(), { type: 'application/octet-stream' });
+        onFileInput([file]);
+      })
+      .catch(error => console.error('Error loading binary file:', error));
+  }
 }
 
 </script>

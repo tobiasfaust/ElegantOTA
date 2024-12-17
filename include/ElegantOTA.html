@@ -80,7 +80,7 @@ function init() {
       .then(([js, versions, releases]) => {
           window.versions = versions;
           window.releases = releases;
-          GenerateSelectList(false, false); // GenerateSelectList(useReleases, PreSelectHighestBuild)
+          GenerateSelectList(versions, releases, false, false); // GenerateSelectList(versions, releases, useReleases, PreSelectHighestBuild)
           resetVariants();
           resetOtaModes();
           document.getElementById('chipFamilyValue').textContent = chipFamily;
@@ -88,50 +88,65 @@ function init() {
       .catch(error => console.error('Error loading versions:', error));
 } 
 
-function resetOtaModes(files_json) { 
+function setOtaModes(list) {
   const parent = document.getElementById('otaMode');
   parent.innerHTML = ''; // Clear existing list
 
-  const o = document.createElement('option');
-  o.value = 'fr';
-  o.text = 'Firmware';
-  o.selected = true;
-  parent.appendChild(o);
-
-  if (!files_json) {
-    //init, no json file loaded, show filesystem option too in case of custom upload is needed
+  if (list.has('filesystem')) {
     const o = document.createElement('option');
     o.value = 'fs';
     o.text = 'Filesystem';
     parent.appendChild(o);
-
-    return;
   }
-  const basePath = files_json.parts[0].path.replace(/\/[^\/]+$/, '');
-  
-  fetch(`${basePath}/files.json`)
-    .then(response => {
-      if (!response.ok) {
-        throw new Error(`${basePath}/files.json not found`);
-      }
-      return response.json();
-    })
-    .then(files_json => {
-      if (files_json.parts.some(part => part.filetype === 'filesystem')) {
-        const o = document.createElement('option');
-        o.value = 'fs';
-        o.text = 'Filesystem';
-        parent.appendChild(o);
-      }
-    })
-    .catch(error => {
-      console.error('Error loading files.json:', error);
-    });
 
+  if (list.has('firmware')) {
+    const o = document.createElement('option');
+    o.value = 'fr';
+    o.text = 'Firmware';
+    o.selected = true;
+    parent.appendChild(o);
+  }
+}
+
+function resetOtaModes(versionNumber) { 
+  const fileTypes = new Set();
+
+  // check at first the releases which OTA-Modes are available for the selected version and chipFamily
+  for (const release of releases) {
+    if (release.build == versionNumber) {
+      release.builds.forEach(build => {
+        if (build.chipFamily == chipFamily) {
+          build.parts.forEach(part => {
+            fileTypes.add(part.filetype);
+          });
+        }
+      });
+    }
+  }
+
+  for (const version of versions) {
+    if (version.build == versionNumber) {
+      version.builds.forEach(build => {
+        if (build.chipFamily == chipFamily) {
+          build.parts.forEach(part => {
+            fileTypes.add(part.filetype);
+          });
+        }
+      });
+    }
+  }
+
+  if (!versionNumber || fileTypes.size == 0) {
+    fileTypes.add('firmware');
+    fileTypes.add('filesystem');
+  }
+  
+  setOtaModes(fileTypes);
+  
 }
   
 function resetVariants(versionNumber) {
-  const variants = getAvailableVariants(versionNumber);
+  const variants = getAvailableVariants(versions, releases, versionNumber, chipFamily);
 
   const parent = document.getElementById('variants');
   parent.innerHTML = ''; // Clear existing list
@@ -146,121 +161,83 @@ function resetVariants(versionNumber) {
   });
 }
 
-function onVersionSelect(handleManifest) {
-  object = document.getElementById('versions');  
+/**
+ * Generate a list of available builds for a given version
+*/
+function onVersionSelect() {
+  object = document.getElementById('versions');
+  variant = document.getElementById('variants').value || undefined
+  otamode = document.getElementById('otaMode').value;
 
   if(object.value == "") { return; }
-  console.log(`Auswahl von Version ${object.value}`);
-    
-  variant = document.getElementById('variants').value || undefined
+  console.log(`selected version: ${object.value}`);
   
-  let manifestPath;
-  for (const version of versions) {
-    if (version.build == object.value && (!variant || version.variant == variant)) {
-        manifestPath = version.path;
-        break;
+  var parts = [];
+
+  // looking for the selected version in the releases
+  for (const release of releases) {
+    if (release.build == object.value && release.variant == variant) {
+      release.builds.forEach(build => {
+        if (build.chipFamily == chipFamily) {
+          parts = build.parts;
+        }
+      });
     }
   }
 
-  console.log(`Manifest gefunden: ${manifestPath}`);
-
-    fetch(`https://${OWNER}.github.io/${REPOSITORY}/${manifestPath}`)
-      .then(response => response.json())
-      .then(data => {
-        console.log('JSON data:', data);
-        const cf = data.builds.find(build => build.chipFamily === chipFamily);
-
-        if (cf) {
-          const pathWithoutDomain = cf.parts[0].path.replace(/^.*\/\/[^\/]+/, '').replace(/\/[^\/]+$/, '');
-          //console.log(`https://${OWNER}.github.io${pathWithoutDomain}/manifest.json`);
-          fetch(`https://${OWNER}.github.io${pathWithoutDomain}/manifest.json`)
-            .then(response => response.json())
-            .then(data => {
-              //console.log('JSON data:', data);
-              handleManifest(data);
-            })
-            .catch(error => console.error('Error loading JSON:', error));
-        } else {
-          //entferne aus der selectlist variants die option die nicht verfügbar ist
-          const selectedVariant = document.getElementById('variants').value;
-          const variantOption = document.querySelector(`#variants option[value="${selectedVariant}"]`);
-          if (variantOption) {
-            document.getElementById('variants').removeChild(variantOption);
+  // if not found in releases, look in the versions
+  if (parts.length == 0) {
+    for (const version of versions) {
+      if (version.build == object.value && version.variant == variant) {
+        version.builds.forEach(build => {
+          if (build.chipFamily == chipFamily) {
+            parts = build.parts;
           }
+        });
+      }
+    }
+  }
 
-          //alert(`Sorry, no ${variant} found for your ${chipFamily}.`);
-        }
-    })
-    .catch(error => console.error('Error loading JSON:', error));
+  // if found, load the binary file
+  if (parts.length > 0) {
+    loadBinaryFile(parts);
+  } else {
+    console.error('No OTA Files found for selected version and variant.');
+  }
+  
 } 
 
-function loadBinaryFile(manifest) {
-  console.log('Loading manifest:', manifest);
-  otamode = document.getElementById('otaMode').value;
+/**
+ * load the right binaryfile 
+ * @param {Array} the right parts section of selected variant and chipFamily 
+ */
+function loadBinaryFile(files) {
+  const fileType = document.getElementById('otaMode').value === 'fr' ? 'firmware' : 'filesystem';
+  const part = files.find(part => part.filetype === fileType);
+  console.log(`Loading ${fileType} with file: ${part.path}`);
 
-  const filepattern = otamode === 'fr' ? 'firmware' : 'littlefs';
-  const filename = `${filepattern}.${chipFamily}.${manifest.version}-${manifest.build}.${manifest.variant}.${manifest.stage}.bin`;
-  //console.log('Suche Filename:', filename);
+  // if requested file is an asset from a release
+  if (part.asset_id) {
+    console.log(`Datei in Release gefunden: ${part.path}`);
 
-  // check if the manifest build and variant are availabe in releases
-  const releaseTag = releases.find(release => release.build === manifest.build && release.variant === manifest.variant)?.releasetag
-  
-  if (releaseTag) {
-    console.log(`Release gefunden: ${releaseTag}, suche dort die Datei ${filename}`);
-
-    const octokit = new Octokit({})
-    octokit.request('GET /repos/{owner}/{repo}/releases/tags/{tag}', {
-      owner: OWNER,
-      repo: REPOSITORY,
-      tag: releaseTag,
-      headers: {
-        'X-GitHub-Api-Version': '2022-11-28'
-      }
-    })
-    .then(response => {
-      // suche in den Release Assets nach der Datei
-      const asset = response.data.assets.find(asset => asset.name === filename);
-      if (asset) {
-        console.log(`Datei in Release ${releaseTag} gefunden: ${asset.name}`);
-        //get the release asset
-        octokit.request('GET /repos/{owner}/{repo}/releases/assets/{asset_id}', {
-          owner: OWNER,
-          repo: REPOSITORY,
-          asset_id: asset.id,
-          headers: {
-            'X-GitHub-Api-Version': '2022-11-28'
-          }
-        })
-        .then(response => {
-          fetch(response.data.url)
-            .then(response => response.arrayBuffer())
-            .then(buffer => {
-              const blob = new Blob([buffer], { type: 'application/octet-stream' });
-              const file = new File([blob], filename.split('/').pop(), { type: 'application/octet-stream' });
-              onFileInput([file]);
-            })
-            .catch(error => console.error('Error loading release asset:', error));
-        })
-
-      } else {
-        console.error(`No ${filename} found in release assets.`);
-      }
-    })
-    .catch(error => console.error('Error loading release:', error));
-    
-
-
-  } else {
-
-    const basepath = manifest.parts[0].path.replace(/\/[^\/]+$/, '');
-
-    console.log(`Loading binary file: ${basepath}/${filename}`);
-
-    fetch(`${basepath}/${filename}`)
+    fetch(part.asset_apiUrl)
       .then(response => response.arrayBuffer())
       .then(buffer => {
         const blob = new Blob([buffer], { type: 'application/octet-stream' });
-        const file = new File([blob], filename.split('/').pop(), { type: 'application/octet-stream' });
+        const file = new File([blob], part.path.split('/').pop(), { type: 'application/octet-stream' });
+        onFileInput([file]);
+      })
+    .catch(error => console.error('Error loading release asset:', error));
+ 
+  } else {
+
+    console.log(`Loading binary file: ${part.path}`);
+
+    fetch(part.path)
+      .then(response => response.arrayBuffer())
+      .then(buffer => {
+        const blob = new Blob([buffer], { type: 'application/octet-stream' });
+        const file = new File([blob], part.path.split('/').pop(), { type: 'application/octet-stream' });
         onFileInput([file]);
       })
       .catch(error => console.error('Error loading binary file:', error));
@@ -299,10 +276,10 @@ function loadBinaryFile(manifest) {
             <table><tr><td>
             <select id="versions" 
                 class="dark:text-white bg-gray-50 border border-[#b0b3b8] border-opacity-40 hover:bg-gray-200 text-gray-700 focus:outline-none focus:ring-4 focus:ring-gray-200 rounded-full px-5 py-3 mr-2 flex flex-row gap-3 items-center dark:bg-[#242526] dark:hover:bg-[#3a3b3c] dark:focus:ring-[#3a3b3c] dark:border-[#3a3b3c]" 
-                onchange="resetVariants(this.value);onVersionSelect(resetOtaModes)">
+                onchange="resetVariants(this.value);resetOtaModes(this.value)">
             </select>
             </td><td>
-            <button id="uploadButton" onclick="onVersionSelect(loadBinaryFile)" class="dark:text-white bg-gray-50 border border-[#b0b3b8] border-opacity-40 hover:bg-gray-200 text-gray-700 focus:outline-none focus:ring-4 focus:ring-gray-200 rounded-full px-5 py-3 mr-2 flex flex-row gap-3 items-center dark:bg-[#242526] dark:hover:bg-[#3a3b3c] dark:focus:ring-[#3a3b3c] dark:border-[#3a3b3c]">
+            <button id="uploadButton" onclick="onVersionSelect()" class="dark:text-white bg-gray-50 border border-[#b0b3b8] border-opacity-40 hover:bg-gray-200 text-gray-700 focus:outline-none focus:ring-4 focus:ring-gray-200 rounded-full px-5 py-3 mr-2 flex flex-row gap-3 items-center dark:bg-[#242526] dark:hover:bg-[#3a3b3c] dark:focus:ring-[#3a3b3c] dark:border-[#3a3b3c]">
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-file-down"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><path d="M12 12v6"/><path d="m15 15-3-3-3 3"/></svg>
           </button>
           </td></tr></table>
@@ -403,7 +380,5 @@ function loadBinaryFile(manifest) {
         </div>
       </div>
     </div>
-    
-    
   </body>
 </html>

@@ -146,10 +146,15 @@ function resetOtaModes(versionNumber) {
 }
   
 function resetVariants(versionNumber) {
-  const variants = getAvailableVariants(versions, releases, versionNumber, chipFamily);
+  const variants = getAvailableVariants(versions, releases, versionNumber, chipFamily); // return a Set of available variants
 
   const parent = document.getElementById('variants');
   parent.innerHTML = ''; // Clear existing list
+
+  // Add a default option if no variants are available
+  if (variants.size == 0) {
+    variants.add('default');
+  }
 
   variants.forEach(variant => {
     const o = document.createElement('option');

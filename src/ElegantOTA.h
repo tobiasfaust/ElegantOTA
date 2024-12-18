@@ -121,8 +121,11 @@ class ElegantOTAClass{
      * @param owner set the git Ownername of Repository
      * @param repo set the git Repository name
      * @param branch set the current git branch name
+     * @param FWVersion set the current Firmware version
      */
     void setGitEnv(String owner, String repo, String branch);
+    void setFWVersion(String version);
+    void setID(String id);
 
   private:
     ELEGANTOTA_WEBSERVER *_server;
@@ -134,6 +137,8 @@ class ElegantOTAClass{
     String gitOwner;
     String gitRepo;
     String gitBranch;
+    String FWVersion;
+    String id;
 
     bool _auto_reboot = true;
     bool _reboot = false;

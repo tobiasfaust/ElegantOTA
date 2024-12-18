@@ -37,7 +37,7 @@ cd ~/MySketchbook/HomeStatusDisplay/ && gzip -c include/elegant_html.html > incl
 <script type="text/javascript" crossorigin>
 window.addEventListener('DOMContentLoaded', init, false);
 
-var versions, releases, OWNER, REPOSITORY, chipFamily;
+var versions, releases, OWNER, REPOSITORY, FWVersion, chipFamily;
 
 function init() {
   fetch("/getdeviceinfo")	
@@ -47,7 +47,8 @@ function init() {
           window.OWNER = data.owner;
           window.REPOSITORY = data.repository;
           window.chipFamily = data.chipfamily;
-          
+          window.FWVersion = data.FWVersion; 
+          window.HwId = data.HwId;         
           return Promise.all([
               // lade die javascripts
               fetch(`https://${OWNER}.github.io/${REPOSITORY}/javascript.js`)
@@ -83,7 +84,9 @@ function init() {
           GenerateSelectList(versions, releases, false, false); // GenerateSelectList(versions, releases, useReleases, PreSelectHighestBuild)
           resetVariants();
           resetOtaModes();
-          document.getElementById('chipFamilyValue').textContent = chipFamily;
+          if(chipFamily.length > 0) { document.getElementById('chipFamilyValue').textContent = chipFamily; } else { document.getElementById('chipFamily').style.display = 'none'; }
+          if(FWVersion.length > 0) { document.getElementById('FWVersionValue').textContent = FWVersion; } else { document.getElementById('FWVersion').style.display = 'none'; }
+          if(HwId.length > 0) { document.getElementById('HwIdValue').textContent = HwId; } else { document.getElementById('HwId').style.display = 'none'; }
       })
       .catch(error => console.error('Error loading versions:', error));
 } 
@@ -371,12 +374,30 @@ function loadBinaryFile(files) {
             </label>
           </div>
         
-          <div class="flex flex-row justify-between items-center gap-4">
+          <div id="chipFamily" class="flex flex-row justify-between items-center gap-4">
             <p>
               ESP ChipFamily
             </p>
             <p>
               <span id="chipFamilyValue"></span>
+            </p>
+          </div> 
+
+          <div id="FWVersion" class="flex flex-row justify-between items-center gap-4">
+            <p>
+              FWVersion
+            </p>
+            <p>
+              <span id="FWVersionValue"></span>
+            </p>
+          </div>
+
+          <div id="HwId" class="flex flex-row justify-between items-center gap-4">
+            <p>
+              Hardware ID
+            </p>
+            <p>
+              <span id="HwIdValue"></span>
             </p>
           </div>
 

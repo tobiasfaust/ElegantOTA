@@ -350,6 +350,14 @@ void ElegantOTAClass::begin(ELEGANTOTA_WEBSERVER *server, const char * username,
   #endif
 }
 
+void ElegantOTAClass::setFWVersion(String version) {
+  this->FWVersion = version;
+}
+
+void ElegantOTAClass::setID(String id) {
+  this->id = id;
+}
+
 void ElegantOTAClass::setGitEnv(String owner, String repo, String branch) {
   this->gitOwner = owner;
   this->gitRepo = repo;
@@ -360,6 +368,9 @@ String ElegantOTAClass::getDeviceInfo() {
   String getdeviceinfo = "{\"owner\":\"" + this->gitOwner + 
                         "\",\"repository\":\"" + this->gitRepo + 
                         "\",\"chipfamily\":\"" + this->getChipFamily() + 
+                        "\",\"branch\":\"" + this->gitBranch +
+                        "\",\"FWVersion\":\"" + this->FWVersion +
+                        "\",\"HwId\":\"" + this->id +
                         "\"}";
   return getdeviceinfo;
 }

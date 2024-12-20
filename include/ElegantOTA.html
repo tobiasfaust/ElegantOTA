@@ -118,6 +118,9 @@ function init() {
           if(chipFamily.length > 0) { document.getElementById('chipFamilyValue').textContent = chipFamily; } else { document.getElementById('chipFamily').style.display = 'none'; }
           if(FWVersion.length > 0) { document.getElementById('FWVersionValue').textContent = FWVersion; } else { document.getElementById('FWVersion').style.display = 'none'; }
           if(HwId.length > 0) { document.getElementById('HwIdValue').textContent = HwId; } else { document.getElementById('HwId').style.display = 'none'; }
+          if(chipFamily.length > 0) { document.getElementById('chipFamilyValue').textContent = chipFamily; } else { document.getElementById('chipFamily').style.display = 'none'; }
+          if(FWVersion.length > 0) { document.getElementById('FWVersionValue').textContent = FWVersion; } else { document.getElementById('FWVersion').style.display = 'none'; }
+          if(HwId.length > 0) { document.getElementById('HwIdValue').textContent = HwId; } else { document.getElementById('HwId').style.display = 'none'; }
       })
       .catch(error => console.error('Error loading versions:', error));
 } 
@@ -494,11 +497,30 @@ function loadBinaryFile(files) {
           </div>
         
           <div id="chipFamily" class="flex flex-row justify-between items-center gap-4">
+          <div id="chipFamily" class="flex flex-row justify-between items-center gap-4">
             <p>
               ESP ChipFamily
             </p>
             <p>
               <span id="chipFamilyValue"></span>
+            </p>
+          </div> 
+
+          <div id="FWVersion" class="flex flex-row justify-between items-center gap-4">
+            <p>
+              FWVersion
+            </p>
+            <p>
+              <span id="FWVersionValue"></span>
+            </p>
+          </div>
+
+          <div id="HwId" class="flex flex-row justify-between items-center gap-4">
+            <p>
+              Hardware ID
+            </p>
+            <p>
+              <span id="HwIdValue"></span>
             </p>
           </div> 
 

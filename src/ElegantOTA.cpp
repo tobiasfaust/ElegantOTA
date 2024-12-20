@@ -5,6 +5,12 @@ ElegantOTAClass::ElegantOTAClass(){}
 void ElegantOTAClass::begin(ELEGANTOTA_WEBSERVER *server, const char * username, const char * password){
   _server = server;
 
+  #ifdef ESP8266
+    LittleFS.begin();
+  #elif ESP32
+    LittleFS.begin(true); // true: format LittleFS/NVS if mount fails
+  #endif
+
   setAuth(username, password);
 
   // determine chip family
@@ -32,6 +38,23 @@ void ElegantOTAClass::begin(ELEGANTOTA_WEBSERVER *server, const char * username,
       return;
     }
   #endif
+
+ //#ifdef CORS_DEBUG
+  DefaultHeaders::Instance().addHeader("Access-Control-Allow-Origin", "*");
+  DefaultHeaders::Instance().addHeader("Access-Control-Allow-Methods", "GET, POST, PUT");
+  DefaultHeaders::Instance().addHeader("Access-Control-Allow-Headers", "Content-Type");
+ //#endif
+ 
+  _server->serveStatic("/ota/getfile", LittleFS, "/", "max-age=3600");
+
+  _server->on("/ota/uploadfile", HTTP_POST, [](AsyncWebServerRequest *request) {},
+                                    std::bind(&ElegantOTAClass::handleUpload, this, std::placeholders::_1, 
+                                        std::placeholders::_2,
+                                        std::placeholders::_3,
+                                        std::placeholders::_4,
+                                        std::placeholders::_5,
+                                        std::placeholders::_6));
+
 
   #if ELEGANTOTA_USE_ASYNC_WEBSERVER == 1
     _server->on("/update", HTTP_GET, [&](AsyncWebServerRequest *request){
@@ -66,7 +89,12 @@ void ElegantOTAClass::begin(ELEGANTOTA_WEBSERVER *server, const char * username,
       response->addHeader("Pragma", "no-cache");
       response->addHeader("Expires", "-1");
 
-      response->print(this->getDeviceInfo());
+      JsonDocument doc;
+      this->getDeviceInfo(doc);
+      String ret("");
+      serializeJson(doc, ret);
+
+      response->print(ret);
       request->send(response);
     });
   #else
@@ -77,7 +105,13 @@ void ElegantOTAClass::begin(ELEGANTOTA_WEBSERVER *server, const char * username,
       _server->sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
       _server->sendHeader("Pragma", "no-cache");
       _server->sendHeader("Expires", "-1");
-      _server->send(200, "application/json", this->getDeviceInfo());
+
+      JsonDocument doc;
+      this->getDeviceInfo(doc);
+      String ret("");
+      serializeJson(doc, ret);
+
+      _server->send(200, "application/json", ret);
   #endif
 
   #if ELEGANTOTA_USE_ASYNC_WEBSERVER == 1
@@ -350,19 +384,112 @@ void ElegantOTAClass::begin(ELEGANTOTA_WEBSERVER *server, const char * username,
   #endif
 }
 
+void ElegantOTAClass::setFWVersion(String version) {
+  this->FWVersion = version;
+}
+
+void ElegantOTAClass::setID(String id) {
+  this->id = id;
+}
+
 void ElegantOTAClass::setGitEnv(String owner, String repo, String branch) {
   this->gitOwner = owner;
   this->gitRepo = repo;
   this->gitBranch = branch;
 }
 
-String ElegantOTAClass::getDeviceInfo() {
-  String getdeviceinfo = "{\"owner\":\"" + this->gitOwner + 
-                        "\",\"repository\":\"" + this->gitRepo + 
-                        "\",\"chipfamily\":\"" + this->getChipFamily() + 
-                        "\"}";
-  return getdeviceinfo;
+void ElegantOTAClass::setBackupRestoreFS(String rootPath) {
+  this->BackupRestoreFS = rootPath;
 }
+
+//###############################################################
+// store a file at Filesystem
+//###############################################################
+void ElegantOTAClass::handleUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
+  
+  Serial.printf("Client: %s %s\n", request->client()->remoteIP().toString().c_str(), request->url().c_str());;
+
+  if (!index) {
+    // open the file on first call and store the file handle in the request object
+    request->_tempFile = LittleFS.open(filename, "w");
+
+    Serial.printf("Upload Start: %s\n", filename.c_str());
+  }
+
+  if (len) {
+    // stream the incoming chunk to the opened file
+    request->_tempFile.write(data, len);
+    Serial.printf("Writing file: %s ,index=%d len=%d bytes, FreeMem: %d\n", filename.c_str(), index, len, ESP.getFreeHeap());
+  }
+
+  if (final) {
+    // close the file handle as the upload is now done
+    request->_tempFile.close();
+    Serial.printf("Upload Complete: %s ,size: %d Bytes\n", filename.c_str(), (index + len));
+ 
+    AsyncResponseStream *response = request->beginResponseStream("text/json");
+    response->addHeader("Server","ESP Async Web Server");
+
+    JsonDocument jsonReturn;
+    String ret;
+
+    jsonReturn["status"] = 1;
+    jsonReturn["text"] = "OK";
+
+    serializeJson(jsonReturn, ret);
+    response->print(ret);
+    request->send(response);
+
+  }
+}
+
+void ElegantOTAClass::getDeviceInfo(JsonDocument& doc) {
+  JsonObject jsonRoot = doc.to<JsonObject>();
+      
+  jsonRoot["owner"] = this->gitOwner.c_str();
+  jsonRoot["repository"] = this->gitRepo.c_str();
+  jsonRoot["chipfamily"] = this->getChipFamily().c_str();
+  jsonRoot["branch"] = this->gitBranch.c_str();
+  jsonRoot["FWVersion"] = this->FWVersion.c_str();
+  jsonRoot["HwId"] = this->id.c_str();
+
+  if (this->BackupRestoreFS.length() > 0) {
+    JsonArray content = jsonRoot["backup"].to<JsonArray>();
+    this->getDirList(content, this->BackupRestoreFS);
+  }
+}
+
+//###############################################################
+// returns the complete folder structure from the given Rootpath
+//###############################################################
+void ElegantOTAClass::getDirList(JsonArray json, String path) {
+  JsonObject jsonRoot = json.add<JsonObject>();
+
+  jsonRoot["path"] = path;
+  JsonArray content = jsonRoot["content"].to<JsonArray>();
+
+  File FSroot = LittleFS.open(path, "r");
+  File file = FSroot.openNextFile();
+
+  while (file) {
+    JsonObject fileObj = content.add<JsonObject>();
+    fileObj["name"] = String(file.name());
+
+    if(file.isDirectory()) {    
+        fileObj["isDir"] = 1;
+        String p = path + "/" + file.name();
+        if (p.startsWith("//")) { p = p.substring(1); }
+        this->getDirList(json, p); // recursive call
+    } else {
+      fileObj["isDir"] = 0;
+    }
+
+    file.close();
+    file = FSroot.openNextFile();
+  }
+  FSroot.close();
+}
+
 
 void ElegantOTAClass::setAuth(const char * username, const char * password){
   _username = username;

@@ -21,6 +21,8 @@ _____ _                        _    ___ _____  _
 
 #include "Arduino.h"
 #include "stdlib_noniso.h"
+#include "ArduinoJson.h"
+#include "LittleFS.h"
 #include "elop.h"
 
 #ifndef ELEGANTOTA_USE_ASYNC_WEBSERVER
@@ -121,8 +123,12 @@ class ElegantOTAClass{
      * @param owner set the git Ownername of Repository
      * @param repo set the git Repository name
      * @param branch set the current git branch name
+     * @param FWVersion set the current Firmware version
      */
     void setGitEnv(String owner, String repo, String branch);
+    void setFWVersion(String version);
+    void setID(String id);
+    void setBackupRestoreFS(String rootPath);
 
   private:
     ELEGANTOTA_WEBSERVER *_server;
@@ -134,6 +140,9 @@ class ElegantOTAClass{
     String gitOwner;
     String gitRepo;
     String gitBranch;
+    String FWVersion;
+    String id;
+    String BackupRestoreFS;
 
     bool _auto_reboot = true;
     bool _reboot = false;
@@ -146,8 +155,10 @@ class ElegantOTAClass{
     std::function<void(size_t current, size_t final)> progressUpdateCallback = NULL;
     std::function<void(bool success)> postUpdateCallback = NULL;
 
-    String getDeviceInfo();
+    void getDeviceInfo(JsonDocument& doc);
     const String& getChipFamily() {return ChipFamily;}
+    void getDirList(JsonArray json, String path);
+    void handleUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final);
 };
 
 extern ElegantOTAClass ElegantOTA;

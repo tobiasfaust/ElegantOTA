@@ -39,11 +39,11 @@ void ElegantOTAClass::begin(ELEGANTOTA_WEBSERVER *server, const char * username,
     }
   #endif
 
- //#ifdef CORS_DEBUG
+ #ifdef CORS_DEBUG
   DefaultHeaders::Instance().addHeader("Access-Control-Allow-Origin", "*");
   DefaultHeaders::Instance().addHeader("Access-Control-Allow-Methods", "GET, POST, PUT");
   DefaultHeaders::Instance().addHeader("Access-Control-Allow-Headers", "Content-Type");
- //#endif
+ #endif
  
   _server->serveStatic("/ota/getfile", LittleFS, "/", "max-age=3600");
 
@@ -406,6 +406,9 @@ void ElegantOTAClass::setBackupRestoreFS(String rootPath) {
 // store a file at Filesystem
 //###############################################################
 void ElegantOTAClass::handleUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
+  if(_authenticate && !request->authenticate(_username.c_str(), _password.c_str())){
+        return request->requestAuthentication();
+  }
   
   Serial.printf("Client: %s %s\n", request->client()->remoteIP().toString().c_str(), request->url().c_str());;
 

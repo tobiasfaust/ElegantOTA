@@ -2,7 +2,7 @@
 
 ElegantOTAClass::ElegantOTAClass(){}
 
-void ElegantOTAClass::begin(ELEGANTOTA_WEBSERVER *server, const char * username, const char * password){
+void ElegantOTAClass::begin(ELEGANTOTA_WEBSERVER *server, const char * username, const char * password) {
   _server = server;
 
   #ifdef ESP8266
@@ -32,13 +32,6 @@ void ElegantOTAClass::begin(ELEGANTOTA_WEBSERVER *server, const char * username,
       this->ChipFamily = "ESP32";
   }
 
-  #if defined(TARGET_RP2040)
-    if (!__isPicoW) {
-      ELEGANTOTA_DEBUG_MSG("RP2040: Not a Pico W, skipping OTA setup\n");
-      return;
-    }
-  #endif
-
  #ifdef CORS_DEBUG
   DefaultHeaders::Instance().addHeader("Access-Control-Allow-Origin", "*");
   DefaultHeaders::Instance().addHeader("Access-Control-Allow-Methods", "GET, POST, PUT");
@@ -56,8 +49,7 @@ void ElegantOTAClass::begin(ELEGANTOTA_WEBSERVER *server, const char * username,
                                         std::placeholders::_6));
 
 
-  #if ELEGANTOTA_USE_ASYNC_WEBSERVER == 1
-    _server->on("/update", HTTP_GET, [&](AsyncWebServerRequest *request){
+  _server->on("/update", HTTP_GET, [&](AsyncWebServerRequest *request){
       if(_authenticate && !request->authenticate(_username.c_str(), _password.c_str())){
         return request->requestAuthentication();
       }
@@ -68,19 +60,9 @@ void ElegantOTAClass::begin(ELEGANTOTA_WEBSERVER *server, const char * username,
       #endif
       response->addHeader("Content-Encoding", "gzip");
       request->send(response);
-    });
-  #else
-    _server->on("/update", HTTP_GET, [&](){
-      if (_authenticate && !_server->authenticate(_username.c_str(), _password.c_str())) {
-        return _server->requestAuthentication();
-      }
-      _server->sendHeader("Content-Encoding", "gzip");
-      _server->send_P(200, "text/html", (const char*)ELEGANT_HTML, ELEGANT_HTML_len);
-    });
-  #endif
-
-  #if ELEGANTOTA_USE_ASYNC_WEBSERVER == 1
-    _server->on("/getdeviceinfo", HTTP_GET, [&](AsyncWebServerRequest *request){
+  });
+  
+  _server->on("/getdeviceinfo", HTTP_GET, [&](AsyncWebServerRequest *request){
       if(_authenticate && !request->authenticate(_username.c_str(), _password.c_str())){
         return request->requestAuthentication();
       }
@@ -92,30 +74,14 @@ void ElegantOTAClass::begin(ELEGANTOTA_WEBSERVER *server, const char * username,
       JsonDocument doc;
       this->getDeviceInfo(doc);
       String ret("");
-      serializeJson(doc, ret);
+      ArduinoJson::serializeJson(doc, ret);
 
       response->print(ret);
       request->send(response);
-    });
-  #else
-    _server->on("/getdeviceinfo", HTTP_GET, [&](){
-      if (_authenticate && !_server->authenticate(_username.c_str(), _password.c_str())) {
-        return _server->requestAuthentication();
-      }
-      _server->sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-      _server->sendHeader("Pragma", "no-cache");
-      _server->sendHeader("Expires", "-1");
 
-      JsonDocument doc;
-      this->getDeviceInfo(doc);
-      String ret("");
-      serializeJson(doc, ret);
-
-      _server->send(200, "application/json", ret);
-  #endif
-
-  #if ELEGANTOTA_USE_ASYNC_WEBSERVER == 1
-    _server->on("/ota/start", HTTP_GET, [&](AsyncWebServerRequest *request) {
+  });
+  
+  _server->on("/ota/start", HTTP_GET, [&](AsyncWebServerRequest *request) {
       if (_authenticate && !request->authenticate(_username.c_str(), _password.c_str())) {
         return request->requestAuthentication();
       }
@@ -126,10 +92,10 @@ void ElegantOTAClass::begin(ELEGANTOTA_WEBSERVER *server, const char * username,
       if (request->hasParam("mode")) {
         String argValue = request->getParam("mode")->value();
         if (argValue == "fs") {
-          ELEGANTOTA_DEBUG_MSG("OTA Mode: Filesystem\n");
+          this->logf("OTA Mode: Filesystem");
           mode = OTA_MODE_FILESYSTEM;
         } else {
-          ELEGANTOTA_DEBUG_MSG("OTA Mode: Firmware\n");
+          this->logf("OTA Mode: Firmware");
           mode = OTA_MODE_FIRMWARE;
         }
       }
@@ -137,14 +103,14 @@ void ElegantOTAClass::begin(ELEGANTOTA_WEBSERVER *server, const char * username,
       // Get file MD5 hash from arg
       if (request->hasParam("hash")) {
         String hash = request->getParam("hash")->value();
-        ELEGANTOTA_DEBUG_MSG(String("MD5: "+hash+"\n").c_str());
+        this->logf(String("MD5: "+hash+"").c_str());
         if (!Update.setMD5(hash.c_str())) {
-          ELEGANTOTA_DEBUG_MSG("ERROR: MD5 hash not valid\n");
+          this->logf("ERROR: MD5 hash not valid");
           return request->send(400, "text/plain", "MD5 parameter invalid");
         }
       }
 
-      #if UPDATE_DEBUG == 1
+      #if DEBUGMODE >= 1
         // Serial output must be active to see the callback serial prints
         Serial.setDebugOutput(true);
       #endif
@@ -160,135 +126,50 @@ void ElegantOTAClass::begin(ELEGANTOTA_WEBSERVER *server, const char * username,
         }
         Update.runAsync(true);
         if (!Update.begin(update_size, mode == OTA_MODE_FILESYSTEM ? U_FS : U_FLASH)) {
-          ELEGANTOTA_DEBUG_MSG("Failed to start update process\n");
+          this->logf("Failed to start update process");
           // Save error to string
           StreamString str;
           Update.printError(str);
           _update_error_str = str.c_str();
           _update_error_str.concat("\n");
-          ELEGANTOTA_DEBUG_MSG(_update_error_str.c_str());
+          this->logf(_update_error_str.c_str());
         }
       #elif defined(ESP32)  
         if (!Update.begin(UPDATE_SIZE_UNKNOWN, mode == OTA_MODE_FILESYSTEM ? U_SPIFFS : U_FLASH)) {
-          ELEGANTOTA_DEBUG_MSG("Failed to start update process\n");
+          this->logf("Failed to start update process");
           // Save error to string
           StreamString str;
           Update.printError(str);
           _update_error_str = str.c_str();
           _update_error_str.concat("\n");
-          ELEGANTOTA_DEBUG_MSG(_update_error_str.c_str());
+          this->logf(_update_error_str.c_str());
         }        
       #endif
 
       return request->send((Update.hasError()) ? 400 : 200, "text/plain", (Update.hasError()) ? _update_error_str.c_str() : "OK");
-    });
-  #else
-    _server->on("/ota/start", HTTP_GET, [&]() {
-      if (_authenticate && !_server->authenticate(_username.c_str(), _password.c_str())) {
-        return _server->requestAuthentication();
-      }
+  });
 
-      // Get header x-ota-mode value, if present
-      OTA_Mode mode = OTA_MODE_FIRMWARE;
-      // Get mode from arg
-      if (_server->hasArg("mode")) {
-        String argValue = _server->arg("mode");
-        if (argValue == "fs") {
-          ELEGANTOTA_DEBUG_MSG("OTA Mode: Filesystem\n");
-          mode = OTA_MODE_FILESYSTEM;
-        } else {
-          ELEGANTOTA_DEBUG_MSG("OTA Mode: Firmware\n");
-          mode = OTA_MODE_FIRMWARE;
-        }
-      }
-
-      // Get file MD5 hash from arg
-      if (_server->hasArg("hash")) {
-        String hash = _server->arg("hash");
-        ELEGANTOTA_DEBUG_MSG(String("MD5: "+hash+"\n").c_str());
-        if (!Update.setMD5(hash.c_str())) {
-          ELEGANTOTA_DEBUG_MSG("ERROR: MD5 hash not valid\n");
-          return _server->send(400, "text/plain", "MD5 parameter invalid");
-        }
-      }
-
-      #if UPDATE_DEBUG == 1
-        // Serial output must be active to see the callback serial prints
-        Serial.setDebugOutput(true);
-      #endif
-
-      // Pre-OTA update callback
-      if (preUpdateCallback != NULL) preUpdateCallback();
-
-      // Start update process
-      #if defined(ESP8266)
-        uint32_t update_size = mode == OTA_MODE_FILESYSTEM ? ((size_t)FS_end - (size_t)FS_start) : ((ESP.getFreeSketchSpace() - 0x1000) & 0xFFFFF000);
-        if (mode == OTA_MODE_FILESYSTEM) {
-          close_all_fs();
-        }
-        Update.runAsync(true);
-        if (!Update.begin(update_size, mode == OTA_MODE_FILESYSTEM ? U_FS : U_FLASH)) {
-          ELEGANTOTA_DEBUG_MSG("Failed to start update process\n");
-          // Save error to string
-          StreamString str;
-          Update.printError(str);
-          _update_error_str = str.c_str();
-          _update_error_str.concat("\n");
-          ELEGANTOTA_DEBUG_MSG(_update_error_str.c_str());
-        }
-      #elif defined(ESP32)  
-        if (!Update.begin(UPDATE_SIZE_UNKNOWN, mode == OTA_MODE_FILESYSTEM ? U_SPIFFS : U_FLASH)) {
-          ELEGANTOTA_DEBUG_MSG("Failed to start update process\n");
-          // Save error to string
-          StreamString str;
-          Update.printError(str);
-          _update_error_str = str.c_str();
-          _update_error_str.concat("\n");
-          ELEGANTOTA_DEBUG_MSG(_update_error_str.c_str());
-        }
-      #elif defined(TARGET_RP2040)
-        uint32_t update_size = 0;
-        // Gather FS Size
-        if (mode == OTA_MODE_FILESYSTEM) {
-          update_size = ((size_t)&_FS_end - (size_t)&_FS_start);
-          LittleFS.end();
-        } else {
-          FSInfo i;
-          LittleFS.begin();
-          LittleFS.info(i);
-          update_size = i.totalBytes - i.usedBytes;
-        }
-        // Start update process
-        if (!Update.begin(update_size, mode == OTA_MODE_FILESYSTEM ? U_FS : U_FLASH)) {
-          ELEGANTOTA_DEBUG_MSG("Failed to start update process because there is not enough space\n");
-          _update_error_str = "Not enough space";
-          return _server->send(400, "text/plain", _update_error_str.c_str());
-        }
-      #endif
-
-      return _server->send((Update.hasError()) ? 400 : 200, "text/plain", (Update.hasError()) ? _update_error_str.c_str() : "OK");
-    });
-  #endif
-
-  #if ELEGANTOTA_USE_ASYNC_WEBSERVER == 1
-    _server->on("/ota/upload", HTTP_POST, [&](AsyncWebServerRequest *request) {
+  _server->on("/ota/upload", HTTP_POST, [&](AsyncWebServerRequest *request) {
         if(_authenticate && !request->authenticate(_username.c_str(), _password.c_str())){
           return request->requestAuthentication();
         }
-        // Post-OTA update callback
-        if (postUpdateCallback != NULL) postUpdateCallback(!Update.hasError());
+        
+        if (Update.hasError()) {
+          if (postUpdateCallback != NULL) postUpdateCallback(!Update.hasError());
+        }
+
+        if (this->_restoreFiles.size() > 0) {
+          // Restore files from FS
+          this->_restoreFileIndex = 0;
+          _isRestoreInProgress = true;
+        }        
+
         AsyncWebServerResponse *response = request->beginResponse((Update.hasError()) ? 400 : 200, "text/plain", (Update.hasError()) ? _update_error_str.c_str() : "OK");
         response->addHeader("Connection", "close");
         response->addHeader("Access-Control-Allow-Origin", "*");
         request->send(response);
-        // Set reboot flag
-        if (!Update.hasError()) {
-          if (_auto_reboot) {
-            _reboot_request_millis = millis();
-            _reboot = true;
-          }
-        }
-    }, [&](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
+
+  }, [&](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
         //Upload handler chunks in data
         if(_authenticate){
             if(!request->authenticate(_username.c_str(), _password.c_str())){
@@ -312,76 +193,31 @@ void ElegantOTAClass::begin(ELEGANTOTA_WEBSERVER *server, const char * username,
         }
             
         if (final) { // if the final flag is set then this is the last frame of data
+            if (postUpdateCallback != NULL) postUpdateCallback(!Update.hasError());
             if (!Update.end(true)) { //true to set the size to the current progress
+                this->logf("Error Occurred. Error #%s: ", String(Update.getError()));
                 // Save error to string
                 StreamString str;
                 Update.printError(str);
                 _update_error_str = str.c_str();
                 _update_error_str.concat("\n");
-                ELEGANTOTA_DEBUG_MSG(_update_error_str.c_str());
+                this->logf(_update_error_str.c_str());
+            } else {
+              this->logf("Update of %s complete", filename.c_str());
+              if (this->_restoreFiles.size() == 0 ) { 
+                  this->logf("No files to restore");
+                  // Set reboot flag now, no Restore needed
+                  if (_auto_reboot) {
+                    _reboot_request_millis = millis();
+                    _reboot = true;
+                  }
+              }
             }
-        }else{
+
+        } else {
             return;
         }
-    });
-  #else
-    _server->on("/ota/upload", HTTP_POST, [&](){
-      if (_authenticate && !_server->authenticate(_username.c_str(), _password.c_str())) {
-        return _server->requestAuthentication();
-      }
-      // Post-OTA update callback
-      if (postUpdateCallback != NULL) postUpdateCallback(!Update.hasError());
-      _server->sendHeader("Connection", "close");
-      _server->send((Update.hasError()) ? 400 : 200, "text/plain", (Update.hasError()) ? _update_error_str.c_str() : "OK");
-      // Set reboot flag
-      if (!Update.hasError()) {
-        if (_auto_reboot) {
-          _reboot_request_millis = millis();
-          _reboot = true;
-        }
-      }
-    }, [&](){
-      // Actual OTA Download
-      HTTPUpload& upload = _server->upload();
-      if (upload.status == UPLOAD_FILE_START) {
-        // Check authentication
-        if (_authenticate && !_server->authenticate(_username.c_str(), _password.c_str())) {
-          ELEGANTOTA_DEBUG_MSG("Authentication Failed on UPLOAD_FILE_START\n");
-          return;
-        }
-        Serial.printf("Update Received: %s\n", upload.filename.c_str());
-        _current_progress_size = 0;
-      } else if (upload.status == UPLOAD_FILE_WRITE) {
-          if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
-            #if UPDATE_DEBUG == 1
-              Update.printError(Serial);
-            #endif
-          }
-
-          _current_progress_size += upload.currentSize;
-          // Progress update callback
-          if (progressUpdateCallback != NULL) progressUpdateCallback(_current_progress_size, upload.totalSize);
-      } else if (upload.status == UPLOAD_FILE_END) {
-          if (Update.end(true)) {
-              ELEGANTOTA_DEBUG_MSG(String("Update Success: "+String(upload.totalSize)+"\n").c_str());
-          } else {
-              ELEGANTOTA_DEBUG_MSG("[!] Update Failed\n");
-              // Store error to string
-              StreamString str;
-              Update.printError(str);
-              _update_error_str = str.c_str();
-              _update_error_str.concat("\n");
-              ELEGANTOTA_DEBUG_MSG(_update_error_str.c_str());
-          }
-
-          #if UPDATE_DEBUG == 1
-            Serial.setDebugOutput(false);
-          #endif
-      } else {
-        ELEGANTOTA_DEBUG_MSG(String("Update Failed Unexpectedly (likely broken connection): status="+String(upload.status)+"\n").c_str());
-      }
-    });
-  #endif
+  });
 }
 
 void ElegantOTAClass::setFWVersion(String version) {
@@ -402,34 +238,88 @@ void ElegantOTAClass::setBackupRestoreFS(String rootPath) {
   this->BackupRestoreFS = rootPath;
 }
 
-//###############################################################
-// store a file at Filesystem
-//###############################################################
+void ElegantOTAClass::mkdir(String path) {
+  std::vector<String> dirs;
+  size_t pos = 0;
+  String token;
+  while ((pos = path.indexOf('/')) != -1) {
+    token = path.substring(0, pos);
+    if (token.length() > 0) {
+      dirs.push_back(token);
+    }
+    path.remove(0, pos + 1);
+  }
+  if (path.length() > 0) {
+    dirs.push_back(path);
+  }
+
+  String currentPath = "";
+  for (size_t i = 0; i < dirs.size(); ++i) {
+    currentPath += "/" + dirs[i];
+    if (!LittleFS.exists(currentPath)) {
+      LittleFS.mkdir(currentPath);
+    }
+  }
+}
+
+void ElegantOTAClass::logf(const char* format, ...) {
+  va_list args;
+  va_start(args, format);
+  char buffer[256];
+  vsnprintf(buffer, sizeof(buffer), format, args);
+  Serial.print("[ElegantOTA] ");
+  Serial.println(buffer);
+  va_end(args);
+}
+
 void ElegantOTAClass::handleUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
   if(_authenticate && !request->authenticate(_username.c_str(), _password.c_str())){
         return request->requestAuthentication();
   }
   
-  Serial.printf("Client: %s %s\n", request->client()->remoteIP().toString().c_str(), request->url().c_str());;
+  this->logf("Client: %s %s", request->client()->remoteIP().toString().c_str(), request->url().c_str());;
 
   if (!index) {
     // open the file on first call and store the file handle in the request object
+    
+    // Extract path from filename, create the path
+    String path = filename.substring(0, filename.lastIndexOf('/'));
+    if (path.length() > 0 && path != "/" && !LittleFS.exists(path)) {
+      this->mkdir(path);
+    }
+
     request->_tempFile = LittleFS.open(filename, "w");
 
-    Serial.printf("Upload Start: %s\n", filename.c_str());
+    this->logf("Upload Start: %s", filename.c_str());
   }
 
   if (len) {
     // stream the incoming chunk to the opened file
     request->_tempFile.write(data, len);
-    Serial.printf("Writing file: %s ,index=%d len=%d bytes, FreeMem: %d\n", filename.c_str(), index, len, ESP.getFreeHeap());
+    this->logf("Writing file: %s ,index=%d len=%d bytes, FreeMem: %d", filename.c_str(), index, len, ESP.getFreeHeap());
   }
 
   if (final) {
     // close the file handle as the upload is now done
     request->_tempFile.close();
-    Serial.printf("Upload Complete: %s ,size: %d Bytes\n", filename.c_str(), (index + len));
+    this->logf("Upload Complete: %s ,size: %d Bytes", filename.c_str(), (index + len));
  
+    if (this->_isRestoreInProgress) {
+      this->logf("Restore file complete: %s (index: %d)", _restoreFiles[this->_restoreFileIndex].c_str(), this->_restoreFileIndex);
+      this->_restoreFileIndex++;
+    }
+
+    if (this->_restoreFileIndex >= _restoreFiles.size()) {
+      // Restore finished
+      this->_isRestoreInProgress = false;
+      this->_restoreFileIndex = 0;
+      this->logf("Restore finished, initiate reboot");
+      if (_auto_reboot) {
+        _reboot_request_millis = millis();
+        _reboot = true;
+      }
+    }
+    
     AsyncResponseStream *response = request->beginResponseStream("text/json");
     response->addHeader("Server","ESP Async Web Server");
 
@@ -462,10 +352,10 @@ void ElegantOTAClass::getDeviceInfo(JsonDocument& doc) {
   }
 }
 
-//###############################################################
-// returns the complete folder structure from the given Rootpath
-//###############################################################
 void ElegantOTAClass::getDirList(JsonArray json, String path) {
+  // clear _restoreFiles
+  this->_restoreFiles.clear();
+
   JsonObject jsonRoot = json.add<JsonObject>();
 
   jsonRoot["path"] = path;
@@ -485,6 +375,7 @@ void ElegantOTAClass::getDirList(JsonArray json, String path) {
         this->getDirList(json, p); // recursive call
     } else {
       fileObj["isDir"] = 0;
+      this->_restoreFiles.push_back(String(file.name()));
     }
 
     file.close();
@@ -493,31 +384,30 @@ void ElegantOTAClass::getDirList(JsonArray json, String path) {
   FSroot.close();
 }
 
-
 void ElegantOTAClass::setAuth(const char * username, const char * password){
-  _username = username;
-  _password = password;
-  _authenticate = _username.length() && _password.length();
+  this->_username = username;
+  this->_password = password;
+  this->_authenticate = _username.length() && _password.length();
 }
 
 void ElegantOTAClass::clearAuth(){
-  _authenticate = false;
+  this->_authenticate = false;
 }
 
 void ElegantOTAClass::setAutoReboot(bool enable){
-  _auto_reboot = enable;
+  this->_auto_reboot = enable;
 }
 
 void ElegantOTAClass::loop() {
   // Check if 2 seconds have passed since _reboot_request_millis was set
-  if (_reboot && millis() - _reboot_request_millis > 2000) {
-    ELEGANTOTA_DEBUG_MSG("Rebooting...\n");
+  if (this->_reboot && millis() - this->_reboot_request_millis > 2000) {
+    this->logf("Rebooting...");
     #if defined(ESP8266) || defined(ESP32)
       ESP.restart();
     #elif defined(TARGET_RP2040)
       rp2040.reboot();
     #endif
-    _reboot = false;
+    this->_reboot = false;
   }
 }
 
@@ -532,6 +422,5 @@ void ElegantOTAClass::onProgress(std::function<void(size_t current, size_t final
 void ElegantOTAClass::onEnd(std::function<void(bool success)> callable){
     postUpdateCallback = callable;
 }
-
 
 ElegantOTAClass ElegantOTA;

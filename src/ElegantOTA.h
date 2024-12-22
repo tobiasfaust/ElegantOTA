@@ -22,25 +22,16 @@ _____ _                        _    ___ _____  _
 #include "Arduino.h"
 #include "stdlib_noniso.h"
 #include "ArduinoJson.h"
+#include <vector>
 #include "LittleFS.h"
 #include "elop.h"
 
-#ifndef ELEGANTOTA_USE_ASYNC_WEBSERVER
-  #define ELEGANTOTA_USE_ASYNC_WEBSERVER 1
+#ifndef CORS_DEBUG
+  #define CORS_DEBUG 0
 #endif
 
-#ifndef ELEGANTOTA_DEBUG
-  #define ELEGANTOTA_DEBUG 0
-#endif
-
-#ifndef UPDATE_DEBUG
-  #define UPDATE_DEBUG 0
-#endif
-
-#if ELEGANTOTA_DEBUG
-  #define ELEGANTOTA_DEBUG_MSG(x) Serial.printf("%s %s", "[ElegantOTA] ", x)
-#else
-  #define ELEGANTOTA_DEBUG_MSG(x)
+#ifndef DEBUGMODE
+  #define DEBUGMODE 0
 #endif
 
 #if defined(ESP8266)
@@ -49,52 +40,17 @@ _____ _                        _    ___ _____  _
   #include "LittleFS.h"
   #include "Updater.h"
   #include "StreamString.h"
-  #if ELEGANTOTA_USE_ASYNC_WEBSERVER == 1
-    #include "ESPAsyncTCP.h"
-    #include "ESPAsyncWebServer.h"
-    #define ELEGANTOTA_WEBSERVER AsyncWebServer
-  #else
-    #include "ESP8266WiFi.h"
-    #include "WiFiClient.h"
-    #include "ESP8266WebServer.h"
-    #define ELEGANTOTA_WEBSERVER ESP8266WebServer
-  #endif
-  #define HARDWARE "ESP8266"
+  #include "ESPAsyncTCP.h"
+  #include "ESPAsyncWebServer.h"
+  #define ELEGANTOTA_WEBSERVER AsyncWebServer
 #elif defined(ESP32)
   #include <functional>
   #include "FS.h"
   #include "Update.h"
   #include "StreamString.h"
-  #if ELEGANTOTA_USE_ASYNC_WEBSERVER == 1
-    #include "AsyncTCP.h"
-    #include "ESPAsyncWebServer.h"
-    #define ELEGANTOTA_WEBSERVER AsyncWebServer
-  #else
-    #include "WiFi.h"
-    #include "WiFiClient.h"
-    #include "WebServer.h"
-    #define ELEGANTOTA_WEBSERVER WebServer
-  #endif
-  #define HARDWARE "ESP32"
-#elif defined(TARGET_RP2040)
-  #include <functional>
-  #include "Arduino.h"
-  #include "FS.h"
-  #include "LittleFS.h"
-  #include "WiFiClient.h"
-  #include "WiFiServer.h"
-  #include "WebServer.h"
-  #include "WiFiUdp.h"
-  #include "StreamString.h"
-  #include "Updater.h"
-  #define HARDWARE              "RP2040"
-  #define ELEGANTOTA_WEBSERVER  WebServer
-  // Throw an error if async mode is enabled
-  #if ELEGANTOTA_USE_ASYNC_WEBSERVER == 1
-    #error "Async mode is not supported on RP2040. Please set ELEGANTOTA_USE_ASYNC_WEBSERVER to 0."
-  #endif
-  extern uint8_t _FS_start;
-  extern uint8_t _FS_end;
+  #include "AsyncTCP.h"
+  #include "ESPAsyncWebServer.h"
+  #define ELEGANTOTA_WEBSERVER AsyncWebServer
 #endif
 
 enum OTA_Mode {
@@ -133,16 +89,20 @@ class ElegantOTAClass{
   private:
     ELEGANTOTA_WEBSERVER *_server;
 
-    bool _authenticate;
-    String _username;
-    String _password;
-    String ChipFamily;
-    String gitOwner;
-    String gitRepo;
-    String gitBranch;
-    String FWVersion;
-    String id;
-    String BackupRestoreFS;
+    bool      _authenticate;
+    String    _username;
+    String    _password;
+    String    ChipFamily;
+    String    gitOwner;
+    String    gitRepo;
+    String    gitBranch;
+    String    FWVersion;
+    String    id;
+    String    BackupRestoreFS;
+    bool      _isRestoreInProgress = false;
+    std::vector<String> _restoreFiles;
+    uint16_t  _restoreFileIndex = 0;
+  
 
     bool _auto_reboot = true;
     bool _reboot = false;
@@ -155,11 +115,55 @@ class ElegantOTAClass{
     std::function<void(size_t current, size_t final)> progressUpdateCallback = NULL;
     std::function<void(bool success)> postUpdateCallback = NULL;
 
+    /*
+    * @brief get the device info as json document
+    * @param doc the json document to store the device info
+    */
     void getDeviceInfo(JsonDocument& doc);
+
+    /**
+     * @brief get the chip family of the current device
+     * @return the chip family
+     */
     const String& getChipFamily() {return ChipFamily;}
+    
+    /**
+     * @brief get the complete folder structure from the given Rootpath
+     * @param json the json object to store the folder structure
+     * @param path the root path to start the search
+     */
     void getDirList(JsonArray json, String path);
+
+    /**
+    * @brief create LittleFS folders recursively
+    * @param path the full path to create
+    */
+    void mkdir(String path);
+
+    //###############################################################
+    // store a file at Filesystem
+    //###############################################################
+    /**
+     * @brief store a file at Filesystem
+     * @param request the AsyncWebserver request object
+     * @param filename the filename to store
+     * @param index the current index chunk of the file
+     * @param data the data to store
+     * @param len the current chunk length of the data
+     * @param final the final flag
+     */
     void handleUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final);
+
+    /**
+    * @brief Wrapper function for logging like Serial.printf
+    * @param format the format string
+    * @param ... the arguments
+    */
+    void logf(const char* format, ...);
+
+    
 };
 
 extern ElegantOTAClass ElegantOTA;
+
 #endif

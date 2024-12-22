@@ -230,10 +230,18 @@ async function generateBackup(urls) {
   backupContent = new FormData(); 
   for (const url of urls) {
       try {
-          const response = await fetch("/ota/getfile" + url);
-          if (!response.ok) {
-              throw new Error('Network response was not ok');
-          }
+          
+          let attempts = 0;
+          let response;
+          do {
+            response = await fetch("/ota/getfile" + url);
+            if (response.ok) break;
+            attempts++;
+            if (attempts >= 5) {
+              throw new Error('Network response was not ok after 5 attempts: ' + response.statusText);
+            }
+          } while (!response.ok || attempts < 5);
+
           const blob = await response.blob();
           backupContent.append('file', blob, url);
       } catch (error) {
@@ -244,6 +252,7 @@ async function generateBackup(urls) {
 
 /**
  * Restore the backup to the ESP from the backupContent FormData element
+ * Function will called from the SuccessColumn Observer
  */
 function DoRestore() {
   if (backupContent.getAll('file').length > 0) {
@@ -269,7 +278,7 @@ function DoRestoreSingleFile(file, percent) {
 
   fetch('/ota/uploadfile', {
       method: 'POST',
-      body: backupContent,
+      body: formData,
   })
   .then(response => response.json())
   .then(json => {
@@ -296,7 +305,7 @@ function DoRestoreSingleFile(file, percent) {
 }
 
 /**
- * Generate a list of available builds for a given version
+ * function is called when upload button was pressed to upload a selected version
 */
 function onVersionSelect() {
   object = document.getElementById('versions');
@@ -335,13 +344,20 @@ function onVersionSelect() {
   // if found, load the binary file
   if (parts.length > 0) {
     // if backup is set and OTA Mode is filesystem, do a backup
-    if(backup && otamode === 'fs' ) DoBackup();
+    if(typeof backup !== 'undefined' && otamode === 'fs' ) DoBackup();
     loadBinaryFile(parts);
   } else {
     console.error('No OTA Files found for selected version and variant.');
   }
-  
 } 
+
+/**
+ * function called when a custom binary file is selected
+ */
+function onFileSelect() {
+  if(typeof backup !== 'undefined' && otamode === 'fs' ) DoBackup();
+  onFileInput(files);
+}
 
 /**
  * load the right binaryfile 
@@ -401,7 +417,7 @@ async function loadBinaryFile(files) {
                 Select File
                 </span>
             </button>
-            <input type="file" id="fileInput" class="hidden" accept=".bin,.bin.gz" onchange="onFileInput(files)">
+            <input type="file" id="fileInput" class="hidden" accept=".bin,.bin.gz" onchange="onFileSelect()">
           </form>
         </div>  
         </td><td>

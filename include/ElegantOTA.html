@@ -371,7 +371,7 @@ async function loadBinaryFile(files) {
   // if requested file is an asset from a release
   if (part.asset_id) {
     console.log(`file found in github release: ${part.path}`);
-    file = "http://www.diefaeuste.de:30080/" + part.asset_apiUrl; // use cors-anywhere to bypass CORS
+    file = part.asset_apiUrl;
   } else {
     console.log(`file found in github project folder: ${part.path}`);
     file = part.path;

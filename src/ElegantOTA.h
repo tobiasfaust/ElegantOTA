@@ -102,7 +102,7 @@ class ElegantOTAClass{
     bool      _isRestoreInProgress = false;
     std::vector<String> _restoreFiles;
     uint16_t  _restoreFileIndex = 0;
-  
+    OTA_Mode   _currentOtaMode = OTA_MODE_FIRMWARE;
 
     bool _auto_reboot = true;
     bool _reboot = false;

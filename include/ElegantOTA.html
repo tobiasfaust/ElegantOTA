@@ -355,8 +355,10 @@ function onVersionSelect() {
  * function called when a custom binary file is selected
  */
 function onFileSelect() {
+  otamode = document.getElementById('otaMode').value;
+  fileInput = document.getElementById('fileInput');
   if(typeof backup !== 'undefined' && otamode === 'fs' ) DoBackup();
-  onFileInput(files);
+  onFileInput(fileInput.files);
 }
 
 /**

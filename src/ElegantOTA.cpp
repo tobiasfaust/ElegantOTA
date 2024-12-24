@@ -98,6 +98,7 @@ void ElegantOTAClass::begin(ELEGANTOTA_WEBSERVER *server, const char * username,
           this->logf("OTA Mode: Firmware");
           mode = OTA_MODE_FIRMWARE;
         }
+        this->_currentOtaMode = mode;
       }
 
       // Get file MD5 hash from arg
@@ -204,7 +205,7 @@ void ElegantOTAClass::begin(ELEGANTOTA_WEBSERVER *server, const char * username,
                 this->logf(_update_error_str.c_str());
             } else {
               this->logf("Update of %s complete", filename.c_str());
-              if (this->_restoreFiles.size() == 0 ) { 
+              if (this->_currentOtaMode == OTA_MODE_FIRMWARE ||  this->_restoreFiles.size() == 0 ) { 
                   this->logf("No files to restore");
                   // Set reboot flag now, no Restore needed
                   if (_auto_reboot) {

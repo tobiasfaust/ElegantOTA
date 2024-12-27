@@ -26,6 +26,10 @@ void ElegantOTAClass::begin(ELEGANTOTA_WEBSERVER *server, const char * username,
       this->ChipFamily = "ESP32-C3";
   } else if (variantString == "esp32s2") {
       this->ChipFamily = "ESP32-S2";
+  } else if (variantString == "esp32c6") {
+      this->ChipFamily = "ESP32-C6";
+  } else if (variantString == "esp32h2") {
+      this->ChipFamily = "ESP32-H2";
   } else if (variantString == "esp8266") {
       this->ChipFamily = "ESP8266";
   } else {

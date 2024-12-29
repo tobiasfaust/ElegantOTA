@@ -1,11 +1,11 @@
 {
-  "name": "ElegantOTA",
+  "name": "ElegantOTA-Custom",
   "keywords": "ElegantOTA, OTA, Update, ESP8266, ESP32, over, the, air, firmware, filesystem, littlefs, spiffs",
-  "description": "OTA updates made slick and simple for everyone!",
+  "description": "Custom OTA updates made slick and simple for everyone! Derived from Ayush Sharma's ElegantOTA library.",
   "repository":
   {
     "type": "git",
-    "url": "https://github.com/ayushsharma82/ElegantOTA.git"
+    "url": "https://github.com/tobiasfaust/ElegantOTA.git"
   },
   "authors":
   [
@@ -13,17 +13,22 @@
       "name": "Ayush Sharma",
       "email": "asrocks5@gmail.com",
       "maintainer": true
+    },
+    {
+      "name": "Tobias Faust",
+      "email": "tobias.faust@gmx.net",
+      "maintainer": true
     }
   ],
   "dependencies": [
     {
       "owner": "mathieucarbou",
       "name": "ESPAsyncWebServer",
-      "version": "^3.3.11",
+      "version": "*",
       "platforms": ["espressif8266", "espressif32"]
     }
   ],
-  "version": "3.1.6",
+  "version": "3.1.7",
   "frameworks": "arduino",
   "platforms": ["espressif8266", "espressif32", "raspberrypi"],
   "build": {

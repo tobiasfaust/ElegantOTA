@@ -80,9 +80,11 @@ class ElegantOTAClass{
      * @param repo set the git Repository name
      * @param branch set the current git branch name
      * @param FWVersion set the current Firmware version
+     * @param FWVariant set the current Firmware variant
      */
     void setGitEnv(String owner, String repo, String branch);
     void setFWVersion(String version);
+    void setFWVariant(String variant);
     void setID(String id);
     void setBackupRestoreFS(String rootPath);
 
@@ -97,6 +99,7 @@ class ElegantOTAClass{
     String    gitRepo;
     String    gitBranch;
     String    FWVersion;
+    String    FWVariant;
     String    id;
     String    BackupRestoreFS;
     bool      _isRestoreInProgress = false;

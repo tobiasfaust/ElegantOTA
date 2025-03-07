@@ -67,7 +67,7 @@ function observeErrorColumn() {
 };
 
 function init() {
-  fetch("/getdeviceinfo")	
+  fetch("http://10.0.2.174/getdeviceinfo")	
   //fetch("https://tobiasfaust.github.io/test/test.json")	
       .then(response => response.json())
       .then(data => {
@@ -75,6 +75,7 @@ function init() {
           window.REPOSITORY = data.repository;
           window.chipFamily = data.chipfamily;
           window.FWVersion = data.FWVersion; 
+          window.FWVariant = data.FWVariant;
           window.HwId = data.HwId;    
           if (data.backup) { 
             window.backup = data.backup;
@@ -115,12 +116,10 @@ function init() {
           GenerateSelectList(versions, releases, false, false); // GenerateSelectList(versions, releases, useReleases, PreSelectHighestBuild)
           resetVariants();
           resetOtaModes();
-          if(chipFamily.length > 0) { document.getElementById('chipFamilyValue').textContent = chipFamily; } else { document.getElementById('chipFamily').style.display = 'none'; }
-          if(FWVersion.length > 0) { document.getElementById('FWVersionValue').textContent = FWVersion; } else { document.getElementById('FWVersion').style.display = 'none'; }
-          if(HwId.length > 0) { document.getElementById('HwIdValue').textContent = HwId; } else { document.getElementById('HwId').style.display = 'none'; }
-          if(chipFamily.length > 0) { document.getElementById('chipFamilyValue').textContent = chipFamily; } else { document.getElementById('chipFamily').style.display = 'none'; }
-          if(FWVersion.length > 0) { document.getElementById('FWVersionValue').textContent = FWVersion; } else { document.getElementById('FWVersion').style.display = 'none'; }
-          if(HwId.length > 0) { document.getElementById('HwIdValue').textContent = HwId; } else { document.getElementById('HwId').style.display = 'none'; }
+          if(chipFamily && chipFamily.length > 0) { document.getElementById('chipFamilyValue').textContent = chipFamily; } else { document.getElementById('chipFamily').style.display = 'none'; }
+          if(FWVersion && FWVersion.length > 0) { document.getElementById('FWVersionValue').textContent = FWVersion; } else { document.getElementById('FWVersion').style.display = 'none'; }
+          if(HwId && HwId.length > 0) { document.getElementById('HwIdValue').textContent = HwId; } else { document.getElementById('HwId').style.display = 'none'; }
+          if(FWVariant && FWVariant.length > 0) { document.getElementById('FWVariantValue').textContent = FWVariant; } else { document.getElementById('FWVariant').style.display = 'none'; }
       })
       .catch(error => console.error('Error loading versions:', error));
 } 
@@ -128,6 +127,13 @@ function init() {
 function setOtaModes(list) {
   const parent = document.getElementById('otaMode');
   parent.innerHTML = ''; // Clear existing list
+
+  const def = document.createElement('option');
+  def.value = '';
+  def.text = 'Select OTA Mode';
+  def.disabled = true;
+  def.selected = true;
+  parent.appendChild(def);
 
   if (list.has('filesystem')) {
     const o = document.createElement('option');
@@ -140,7 +146,6 @@ function setOtaModes(list) {
     const o = document.createElement('option');
     o.value = 'fr';
     o.text = 'Firmware';
-    o.selected = true;
     parent.appendChild(o);
   }
 }
@@ -178,8 +183,10 @@ function resetOtaModes(versionNumber) {
     fileTypes.add('filesystem');
   }
   
+  if(versionNumber && fileTypes.size > 1) document.getElementById('hintMultipleModes').style.display = 'flex';
+  else document.getElementById('hintMultipleModes').style.display = 'none';
+    
   setOtaModes(fileTypes);
-  
 }
   
 function resetVariants(versionNumber) {
@@ -191,6 +198,15 @@ function resetVariants(versionNumber) {
   // Add a default option if no variants are available
   if (variants.size == 0) {
     variants.add('default');
+  } 
+  
+  if (variants.size > 1) {
+    const def = document.createElement('option');
+    def.value = '';
+    def.text = 'Select Variant';
+    def.disabled = true;
+    def.selected = true;
+    parent.appendChild(def);
   }
 
   variants.forEach(variant => {
@@ -306,11 +322,28 @@ function DoRestoreSingleFile(file, percent) {
 function onVersionSelect() {
   object = document.getElementById('versions');
   variant = document.getElementById('variants').value || undefined
-  otamode = document.getElementById('otaMode').value;
+  otamode = document.getElementById('otaMode').value || undefined;
 
-  if(object.value == "") { return; }
-  console.log(`selected version: ${object.value}`);
+  console.log("OTA Mode: " + otamode);
+  console.log("Variant: " + variant);
+
+  if(object.value == "") { 
+    alert('Please select a version.');
+    return;
+  }
+
+  if (typeof otamode === 'undefined') {
+    alert('Please select an OTA Mode.');
+    return;
+  }
+
+  if (typeof variant === 'undefined') {
+    alert('Please select a variant.');
+    return;
+  }
   
+  console.log(`selected version: ${object.value} , variant: ${variant}, OTA Mode: ${otamode}`);
+
   var parts = [];
 
   // looking for the selected version in the releases
@@ -433,6 +466,14 @@ async function loadBinaryFile(files) {
           </td></tr></table>
           </div>
         </td></tr></table>
+        
+        <!-- hint if multiple OTA-Modes exists -->
+        <div id="hintMultipleModes" style="display: none;" class="flex flex-col justify-center">
+          <span class="text-center text-xs dark:text-[#b0b3b8]">
+            Please flash firmware AND filesystem together!
+          </span>
+        </div>
+      
         <!-- <form>
           <div id="dropzone" class="px-10 py-10 border rounded-xl border-dashed dark:border-opacity-20 border-opacity-20 dark:hover:border-opacity-80 hover:border-opacity-80 text-sm dark:border-[#e4e6eb] border-[#18191a] transition-colors cursor-pointer text-center w-[320px]">
             <p>Drag and drop here <br/><span class="dark:text-[#b0b3b8] dark:text-opacity-60 text-black text-opacity-40">or <br/> click to select (.bin) file</p>
@@ -529,6 +570,15 @@ async function loadBinaryFile(files) {
             </p>
             <p>
               <span id="FWVersionValue"></span>
+            </p>
+          </div>
+
+          <div id="FWVariant" class="flex flex-row justify-between items-center gap-4">
+            <p>
+              FWVariant
+            </p>
+            <p>
+              <span id="FWVariantValue"></span>
             </p>
           </div>
 

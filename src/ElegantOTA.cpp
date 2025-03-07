@@ -224,6 +224,9 @@ void ElegantOTAClass::begin(ELEGANTOTA_WEBSERVER *server, const char * username,
         }
   });
 }
+void ElegantOTAClass::setFWVariant(String variant) {
+  this->FWVariant = variant;
+}
 
 void ElegantOTAClass::setFWVersion(String version) {
   this->FWVersion = version;
@@ -350,6 +353,7 @@ void ElegantOTAClass::getDeviceInfo(JsonDocument& doc) {
   jsonRoot["branch"] = this->gitBranch.c_str();
   jsonRoot["FWVersion"] = this->FWVersion.c_str();
   jsonRoot["HwId"] = this->id.c_str();
+  jsonRoot["FWVariant"] = this->FWVariant.c_str();
 
   if (this->BackupRestoreFS.length() > 0) {
     JsonArray content = jsonRoot["backup"].to<JsonArray>();

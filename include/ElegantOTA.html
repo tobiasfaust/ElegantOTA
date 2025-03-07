@@ -67,7 +67,7 @@ function observeErrorColumn() {
 };
 
 function init() {
-  fetch("http://10.0.2.174/getdeviceinfo")	
+  fetch("/getdeviceinfo")	
   //fetch("https://tobiasfaust.github.io/test/test.json")	
       .then(response => response.json())
       .then(data => {

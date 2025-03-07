@@ -83,6 +83,7 @@ class ElegantOTAClass{
      * @param FWVariant set the current Firmware variant
      */
     void setGitEnv(String owner, String repo, String branch);
+    void setGitEnv(String owner, String repo, String branch, uint16_t build);
     void setFWVersion(String version);
     void setFWVariant(String variant);
     void setID(String id);
@@ -98,6 +99,7 @@ class ElegantOTAClass{
     String    gitOwner;
     String    gitRepo;
     String    gitBranch;
+    uint16_t  gitBuild;
     String    FWVersion;
     String    FWVariant;
     String    id;

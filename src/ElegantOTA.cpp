@@ -237,9 +237,14 @@ void ElegantOTAClass::setID(String id) {
 }
 
 void ElegantOTAClass::setGitEnv(String owner, String repo, String branch) {
+  this->setGitEnv(owner, repo, branch, 0);
+}
+
+void ElegantOTAClass::setGitEnv(String owner, String repo, String branch, uint16_t build) {
   this->gitOwner = owner;
   this->gitRepo = repo;
   this->gitBranch = branch;
+  this->gitBuild = build;
 }
 
 void ElegantOTAClass::setBackupRestoreFS(String rootPath) {
@@ -351,6 +356,7 @@ void ElegantOTAClass::getDeviceInfo(JsonDocument& doc) {
   jsonRoot["repository"] = this->gitRepo.c_str();
   jsonRoot["chipfamily"] = this->getChipFamily().c_str();
   jsonRoot["branch"] = this->gitBranch.c_str();
+  jsonRoot["build"] = this->gitBuild;
   jsonRoot["FWVersion"] = this->FWVersion.c_str();
   jsonRoot["HwId"] = this->id.c_str();
   jsonRoot["FWVariant"] = this->FWVariant.c_str();

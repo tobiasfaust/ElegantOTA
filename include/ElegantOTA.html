@@ -36,35 +36,6 @@ cd ~/MySketchbook/HomeStatusDisplay/ && gzip -c include/elegant_html.html > incl
 
 <script type="text/javascript" crossorigin>
 window.addEventListener('DOMContentLoaded', init, false);
-document.addEventListener("DOMContentLoaded", observeErrorColumn);
-
-var backupContent;
-
-/* 
- * This function observed the successColum div.
- * The successColumn div is called when OTA has successful finished.
- * and the div is displayed. Then call the DoRestore function 
- * if the filesystem mode was selected.
- */
-function observeErrorColumn() {
-    const successColumn = document.getElementById("successColumn");
-    
-    if (successColumn) {
-        const observer = new MutationObserver(function(mutationsList, observer) {
-            for (const mutation of mutationsList) {
-                if (mutation.type === 'attributes' && mutation.attributeName === 'class') {
-                  const isDisplayed = window.getComputedStyle(successColumn).display !== 'none';
-                    if (isDisplayed) {
-                      otamode = document.getElementById('otaMode').value;
-                      if(backupContent && otamode && otamode === 'fs' ) DoRestore();
-                    }
-                }
-            }
-        });
-
-        observer.observe(successColumn, { attributes: true });
-    }
-};
 
 function init() {
   fetch("/getdeviceinfo")	
@@ -77,9 +48,6 @@ function init() {
           window.FWVersion = data.FWVersion; 
           window.FWVariant = data.FWVariant;
           window.HwId = data.HwId;    
-          if (data.backup) { 
-            window.backup = data.backup;
-          }
 
           return Promise.all([
               // lade die javascripts
@@ -219,103 +187,6 @@ function resetVariants(versionNumber) {
   });
 }
 
-// ***********************************
-// backup complete filesystem of ESP
-// prepare an array with all files to backup
-// ***********************************
-async function DoBackup() {
-  var url = [];
-  
-  for (let i = 0; i < backup.length; i++) {
-    let path = backup[i].path;
-    backup[i].content.forEach(function (file) {
-      if (file.isDir === 0) {
-        url.push(path + '/' + file.name);
-      }
-    });
-  }
-  
-  await generateBackup(url);
-}
-
-/**
- * Create a form element. Fetch each file of "url" and append it´s blob content as file to the form element.
- * @param {Array} urls - Array of file urls
- */
-async function generateBackup(urls) {
-  backupContent = new FormData(); 
-  for (const url of urls) {
-      try {
-          
-          let response;
-          response = await fetch("/ota/getfile" + url);
-
-          if (!response.ok)
-            throw new Error('Network response was not ok for file: ' + url + " -> " + response.statusText);
-          else {
-            const blob = await response.blob();
-            backupContent.append('file', blob, url);
-          }
-      } catch (error) {
-          console.error('Fehler beim Laden der Datei:', error);
-      }
-  }
-}
-
-/**
- * Restore the backup to the ESP from the backupContent FormData element
- * Function will called from the SuccessColumn Observer
- */
-function DoRestore() {
-  if (backupContent.getAll('file').length > 0) {
-
-    successcolumn = document.getElementById('successColumn');
-    progresscolumn = document.getElementById('progressColumn');
-    progresstitle = document.getElementById('progressTitle');
-
-    successcolumn.style.display = 'none';
-    progresscolumn.style.display = 'flex';
-    progresstitle.textContent = 'Restoring configuration...';
-    
-    var count = backupContent.getAll('file').length;
-    for (var i = 0; i < count; i++) {
-      DoRestoreSingleFile(backupContent.getAll('file')[i], (((i+1) / count) * 100) );
-    }     
-  }
-}
-
-function DoRestoreSingleFile(file, percent) {
-  const formData = new FormData();
-  formData.append('file', file);
-
-  fetch('/ota/uploadfile', {
-      method: 'POST',
-      body: formData,
-  })
-  .then(response => response.json())
-  .then(json => {
-      console.log(`Restoring of ${file.name} successful`, json);
-      
-      progressbar = document.getElementById('progressBar');
-      progressvalue = document.getElementById('progressValue');
-    
-      progressbar.style.width = percent + '%';
-      progressvalue.textContent = Math.round(percent) + '%';
-      
-      if (percent == 100) {
-        // hide progressbar and show success column after last file is restored
-        new Promise(resolve => setTimeout(resolve, 1000)).then(() => {
-          successcolumn = document.getElementById('successColumn');
-          progresscolumn = document.getElementById('progressColumn');
-      
-          successcolumn.style.display = 'flex';
-          progresscolumn.style.display = 'none';
-        });
-        
-      }
-  });
-}
-
 /**
  * function is called when upload button was pressed to upload a selected version
 */
@@ -372,8 +243,6 @@ function onVersionSelect() {
 
   // if found, load the binary file
   if (parts.length > 0) {
-    // if backup is set and OTA Mode is filesystem, do a backup
-    if(typeof backup !== 'undefined' && otamode === 'fs' ) DoBackup();
     loadBinaryFile(parts);
   } else {
     console.error('No OTA Files found for selected version and variant.');
@@ -386,7 +255,7 @@ function onVersionSelect() {
 function onFileSelect() {
   otamode = document.getElementById('otaMode').value;
   fileInput = document.getElementById('fileInput');
-  if(typeof backup !== 'undefined' && otamode === 'fs' ) DoBackup();
+  
   onFileInput(fileInput.files);
 }
 

@@ -21,7 +21,7 @@ def generate_gzip_hex(source_file, output_file):
 
     # Convert the gzip file to hex
     with open(output_file, 'w') as f:
-        subprocess.run(['xxd', '-nELEGANT_HTML', '-i', gzip_file], stdout=f)
+        subprocess.run(['xxd', '-i', gzip_file], stdout=f) # '-nELEGANT_HTML' not longer supported in newer xxd versions
 
     # Clean up the gzip file
     os.remove(gzip_file)

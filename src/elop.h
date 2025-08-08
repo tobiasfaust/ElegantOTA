@@ -3,7 +3,7 @@
 
 #include <Arduino.h>
 
-extern unsigned char ELEGANT_HTML[];
-extern unsigned int ELEGANT_HTML_len;
+extern unsigned char include_ElegantOTA_html_gz[];
+extern unsigned int include_ElegantOTA_html_gz_len;
 
 #endif

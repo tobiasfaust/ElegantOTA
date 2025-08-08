@@ -87,7 +87,13 @@ class ElegantOTAClass{
     void setFWVersion(String version);
     void setFWVariant(String variant);
     void setID(String id);
-    void setBackupRestoreFS(String rootPath);
+    
+    /**
+     * @brief Set the target partition for filesystem OTA updates on ESP32
+     * @param partition The partition label (must match partitions.csv)
+     * @note IMPORTANT: Must be called BEFORE begin() on ESP32!
+     */
+    void setTargetPartition(String FsPartitionLabel);
 
   private:
     ELEGANTOTA_WEBSERVER *_server;
@@ -103,10 +109,7 @@ class ElegantOTAClass{
     String    FWVersion;
     String    FWVariant;
     String    id;
-    String    BackupRestoreFS;
-    bool      _isRestoreInProgress = false;
-    std::vector<String> _restoreFiles;
-    uint16_t  _restoreFileIndex = 0;
+    String    FsPartitionLabel = "";  // Default partition
     OTA_Mode   _currentOtaMode = OTA_MODE_FIRMWARE;
 
     bool _auto_reboot = true;
@@ -132,33 +135,6 @@ class ElegantOTAClass{
      */
     const String& getChipFamily() {return ChipFamily;}
     
-    /**
-     * @brief get the complete folder structure from the given Rootpath
-     * @param json the json object to store the folder structure
-     * @param path the root path to start the search
-     */
-    void getDirList(JsonArray json, String path);
-
-    /**
-    * @brief create LittleFS folders recursively
-    * @param path the full path to create
-    */
-    void mkdir(String path);
-
-    //###############################################################
-    // store a file at Filesystem
-    //###############################################################
-    /**
-     * @brief store a file at Filesystem
-     * @param request the AsyncWebserver request object
-     * @param filename the filename to store
-     * @param index the current index chunk of the file
-     * @param data the data to store
-     * @param len the current chunk length of the data
-     * @param final the final flag
-     */
-    void handleUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final);
-
     /**
     * @brief Wrapper function for logging like Serial.printf
     * @param format the format string

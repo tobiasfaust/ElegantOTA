@@ -4,14 +4,7 @@ ElegantOTAClass::ElegantOTAClass(){}
 
 void ElegantOTAClass::begin(ELEGANTOTA_WEBSERVER *server, const char * username, const char * password) {
   _server = server;
-
-  #ifdef ESP8266
-    LittleFS.begin();
-  #elif ESP32
-    LittleFS.begin(true); // true: format LittleFS/NVS if mount fails
-  #endif
-
-  setAuth(username, password);
+  this->setAuth(username, password);
 
   // determine chip family
   #ifdef ESP32
@@ -42,25 +35,14 @@ void ElegantOTAClass::begin(ELEGANTOTA_WEBSERVER *server, const char * username,
   DefaultHeaders::Instance().addHeader("Access-Control-Allow-Headers", "Content-Type");
  #endif
  
-  _server->serveStatic("/ota/getfile", LittleFS, "/", "max-age=3600");
-
-  _server->on("/ota/uploadfile", HTTP_POST, [](AsyncWebServerRequest *request) {},
-                                    std::bind(&ElegantOTAClass::handleUpload, this, std::placeholders::_1, 
-                                        std::placeholders::_2,
-                                        std::placeholders::_3,
-                                        std::placeholders::_4,
-                                        std::placeholders::_5,
-                                        std::placeholders::_6));
-
-
   _server->on("/update", HTTP_GET, [&](AsyncWebServerRequest *request){
       if(_authenticate && !request->authenticate(_username.c_str(), _password.c_str())){
         return request->requestAuthentication();
       }
       #if defined(ASYNCWEBSERVER_VERSION) && ASYNCWEBSERVER_VERSION_MAJOR > 2  // This means we are using recommended fork of AsyncWebServer
-        AsyncWebServerResponse *response = request->beginResponse(200, "text/html", ELEGANT_HTML, ELEGANT_HTML_len);
+        AsyncWebServerResponse *response = request->beginResponse(200, "text/html", include_ElegantOTA_html_gz, include_ElegantOTA_html_gz_len);
       #else
-        AsyncWebServerResponse *response = request->beginResponse_P(200, "text/html", ELEGANT_HTML, ELEGANT_HTML_len);
+        AsyncWebServerResponse *response = request->beginResponse_P(200, "text/html", include_ElegantOTA_html_gz, include_ElegantOTA_html_gz_len);
       #endif
       response->addHeader("Content-Encoding", "gzip");
       request->send(response);
@@ -108,9 +90,8 @@ void ElegantOTAClass::begin(ELEGANTOTA_WEBSERVER *server, const char * username,
       // Get file MD5 hash from arg
       if (request->hasParam("hash")) {
         String hash = request->getParam("hash")->value();
-        this->logf(String("MD5: "+hash+"").c_str());
         if (!Update.setMD5(hash.c_str())) {
-          this->logf("ERROR: MD5 hash not valid");
+          this->logf("ERROR: MD5 hash not valid: %s", hash.c_str());
           return request->send(400, "text/plain", "MD5 parameter invalid");
         }
       }
@@ -140,7 +121,13 @@ void ElegantOTAClass::begin(ELEGANTOTA_WEBSERVER *server, const char * username,
           this->logf(_update_error_str.c_str());
         }
       #elif defined(ESP32)  
-        if (!Update.begin(UPDATE_SIZE_UNKNOWN, mode == OTA_MODE_FILESYSTEM ? U_SPIFFS : U_FLASH)) {
+        
+        //if (!Update.begin(UPDATE_SIZE_UNKNOWN, mode == OTA_MODE_FILESYSTEM ? U_SPIFFS : U_FLASH)) {
+        if (this->FsPartitionLabel!="") {
+          this->logf("Starting update on partition: %s", this->FsPartitionLabel.c_str());
+        }
+
+        if (!Update.begin(UPDATE_SIZE_UNKNOWN, (mode == OTA_MODE_FILESYSTEM ? U_SPIFFS : U_FLASH), -1, LOW, (this->FsPartitionLabel=="" ? NULL : this->FsPartitionLabel.c_str()))) {
           this->logf("Failed to start update process");
           // Save error to string
           StreamString str;
@@ -162,12 +149,6 @@ void ElegantOTAClass::begin(ELEGANTOTA_WEBSERVER *server, const char * username,
         if (Update.hasError()) {
           if (postUpdateCallback != NULL) postUpdateCallback(!Update.hasError());
         }
-
-        if (this->_restoreFiles.size() > 0) {
-          // Restore files from FS
-          this->_restoreFileIndex = 0;
-          _isRestoreInProgress = true;
-        }        
 
         AsyncWebServerResponse *response = request->beginResponse((Update.hasError()) ? 400 : 200, "text/plain", (Update.hasError()) ? _update_error_str.c_str() : "OK");
         response->addHeader("Connection", "close");
@@ -209,13 +190,10 @@ void ElegantOTAClass::begin(ELEGANTOTA_WEBSERVER *server, const char * username,
                 this->logf(_update_error_str.c_str());
             } else {
               this->logf("Update of %s complete", filename.c_str());
-              if (this->_currentOtaMode == OTA_MODE_FIRMWARE ||  this->_restoreFiles.size() == 0 ) { 
-                  this->logf("No files to restore");
-                  // Set reboot flag now, no Restore needed
-                  if (_auto_reboot) {
-                    _reboot_request_millis = millis();
-                    _reboot = true;
-                  }
+              // Set reboot flag now, no Restore needed
+              if (_auto_reboot) {
+                _reboot_request_millis = millis();
+                 _reboot = true;
               }
             }
 
@@ -247,32 +225,8 @@ void ElegantOTAClass::setGitEnv(String owner, String repo, String branch, uint16
   this->gitBuild = build;
 }
 
-void ElegantOTAClass::setBackupRestoreFS(String rootPath) {
-  this->BackupRestoreFS = rootPath;
-}
-
-void ElegantOTAClass::mkdir(String path) {
-  std::vector<String> dirs;
-  size_t pos = 0;
-  String token;
-  while ((pos = path.indexOf('/')) != -1) {
-    token = path.substring(0, pos);
-    if (token.length() > 0) {
-      dirs.push_back(token);
-    }
-    path.remove(0, pos + 1);
-  }
-  if (path.length() > 0) {
-    dirs.push_back(path);
-  }
-
-  String currentPath = "";
-  for (size_t i = 0; i < dirs.size(); ++i) {
-    currentPath += "/" + dirs[i];
-    if (!LittleFS.exists(currentPath)) {
-      LittleFS.mkdir(currentPath);
-    }
-  }
+void ElegantOTAClass::setTargetPartition(String FsPartitionLabel) {
+  this->FsPartitionLabel = FsPartitionLabel;
 }
 
 void ElegantOTAClass::logf(const char* format, ...) {
@@ -283,70 +237,6 @@ void ElegantOTAClass::logf(const char* format, ...) {
   Serial.print("[ElegantOTA] ");
   Serial.println(buffer);
   va_end(args);
-}
-
-void ElegantOTAClass::handleUpload(AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
-  if(_authenticate && !request->authenticate(_username.c_str(), _password.c_str())){
-        return request->requestAuthentication();
-  }
-  
-  this->logf("Client: %s %s", request->client()->remoteIP().toString().c_str(), request->url().c_str());;
-
-  if (!index) {
-    // open the file on first call and store the file handle in the request object
-    
-    // Extract path from filename, create the path
-    String path = filename.substring(0, filename.lastIndexOf('/'));
-    if (path.length() > 0 && path != "/" && !LittleFS.exists(path)) {
-      this->mkdir(path);
-    }
-
-    request->_tempFile = LittleFS.open(filename, "w");
-
-    this->logf("Upload Start: %s", filename.c_str());
-  }
-
-  if (len) {
-    // stream the incoming chunk to the opened file
-    request->_tempFile.write(data, len);
-    this->logf("Writing file: %s ,index=%d len=%d bytes, FreeMem: %d", filename.c_str(), index, len, ESP.getFreeHeap());
-  }
-
-  if (final) {
-    // close the file handle as the upload is now done
-    request->_tempFile.close();
-    this->logf("Upload Complete: %s ,size: %d Bytes", filename.c_str(), (index + len));
- 
-    if (this->_isRestoreInProgress) {
-      this->logf("Restore file complete: %s (index: %d)", _restoreFiles[this->_restoreFileIndex].c_str(), this->_restoreFileIndex);
-      this->_restoreFileIndex++;
-    }
-
-    if (this->_restoreFileIndex >= _restoreFiles.size()) {
-      // Restore finished
-      this->_isRestoreInProgress = false;
-      this->_restoreFileIndex = 0;
-      this->logf("Restore finished, initiate reboot");
-      if (_auto_reboot) {
-        _reboot_request_millis = millis();
-        _reboot = true;
-      }
-    }
-    
-    AsyncResponseStream *response = request->beginResponseStream("text/json");
-    response->addHeader("Server","ESP Async Web Server");
-
-    JsonDocument jsonReturn;
-    String ret;
-
-    jsonReturn["status"] = 1;
-    jsonReturn["text"] = "OK";
-
-    serializeJson(jsonReturn, ret);
-    response->print(ret);
-    request->send(response);
-
-  }
 }
 
 void ElegantOTAClass::getDeviceInfo(JsonDocument& doc) {
@@ -361,42 +251,6 @@ void ElegantOTAClass::getDeviceInfo(JsonDocument& doc) {
   jsonRoot["HwId"] = this->id.c_str();
   jsonRoot["FWVariant"] = this->FWVariant.c_str();
 
-  if (this->BackupRestoreFS.length() > 0) {
-    JsonArray content = jsonRoot["backup"].to<JsonArray>();
-    this->getDirList(content, this->BackupRestoreFS);
-  }
-}
-
-void ElegantOTAClass::getDirList(JsonArray json, String path) {
-  // clear _restoreFiles
-  this->_restoreFiles.clear();
-
-  JsonObject jsonRoot = json.add<JsonObject>();
-
-  jsonRoot["path"] = path;
-  JsonArray content = jsonRoot["content"].to<JsonArray>();
-
-  File FSroot = LittleFS.open(path, "r");
-  File file = FSroot.openNextFile();
-
-  while (file) {
-    JsonObject fileObj = content.add<JsonObject>();
-    fileObj["name"] = String(file.name());
-
-    if(file.isDirectory()) {    
-        fileObj["isDir"] = 1;
-        String p = path + "/" + file.name();
-        if (p.startsWith("//")) { p = p.substring(1); }
-        this->getDirList(json, p); // recursive call
-    } else {
-      fileObj["isDir"] = 0;
-      this->_restoreFiles.push_back(String(file.name()));
-    }
-
-    file.close();
-    file = FSroot.openNextFile();
-  }
-  FSroot.close();
 }
 
 void ElegantOTAClass::setAuth(const char * username, const char * password){

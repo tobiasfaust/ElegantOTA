@@ -240,6 +240,14 @@ function onVersionSelect() {
       }
     }
   }
+
+  // if found, load the binary file
+  if (parts.length > 0) {
+    loadBinaryFile(parts);
+  } else {
+    console.error('No OTA Files found for selected version and variant.');
+  }
+
 } 
 
 /**

@@ -123,7 +123,7 @@ void ElegantOTAClass::begin(ELEGANTOTA_WEBSERVER *server, const char * username,
       #elif defined(ESP32)  
         
         //if (!Update.begin(UPDATE_SIZE_UNKNOWN, mode == OTA_MODE_FILESYSTEM ? U_SPIFFS : U_FLASH)) {
-        if (this->FsPartitionLabel!="") {
+        if (this->FsPartitionLabel!="" && mode == OTA_MODE_FILESYSTEM) {
           this->logf("Starting update on partition: %s", this->FsPartitionLabel.c_str());
         }
 
